@@ -1,0 +1,960 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>E5800 screen prototype</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#E9ECEF}
+a{color:#4FD1B5}a:hover{color:#7FE3CC}
+.dev{width:528px;height:720px;box-sizing:border-box;padding:24px;background:#1A1D22;border-radius:28px;display:flex;flex-direction:column;align-items:center;gap:14px;font-family:Inter,system-ui,sans-serif}
+.glass{width:480px;height:640px;border-radius:10px;overflow:hidden;position:relative;background:#0E1116}
+.px{width:240px;height:320px;transform:scale(2);transform-origin:0 0;position:relative;font-family:Inter,system-ui,sans-serif;color:#E8EAED;background:#0E1116}
+.scr{position:absolute;inset:0;display:flex;flex-direction:column}
+.sb{height:22px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 10px;font-size:10px;font-weight:600;color:#C9D1DA}
+.sbl{display:flex;align-items:center;gap:5px}
+.bars{display:flex;align-items:flex-end;gap:1px;height:9px}
+.bars i{display:block;width:2px;background:#C9D1DA;border-radius:1px}
+.bars i.off{background:#3A424E}
+.batt{display:flex;align-items:center;gap:1px}
+.batt b{display:flex;align-items:center;justify-content:center;width:22px;height:11px;border:1px solid #C9D1DA;border-radius:3px;font-size:8px;font-weight:700;box-sizing:border-box}
+.batt s{display:block;width:2px;height:4px;background:#C9D1DA;border-radius:0 1px 1px 0}
+.body{flex:1;min-height:0;padding:4px 10px 8px;display:flex;flex-direction:column;gap:6px}
+.title{font-size:15px;font-weight:700;margin:0 0 2px}
+.tabs{height:44px;flex:none;display:flex;border-top:1px solid #222833;background:#12161C}
+.tab{flex:1;background:none;border:0;color:#8B95A1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:600 9px Inter,system-ui,sans-serif;cursor:pointer;padding:0;position:relative}
+.tab.on{color:#4FD1B5}
+.tab .dot{position:absolute;top:5px;left:50%;margin-left:5px;width:6px;height:6px;border-radius:50%;background:#F5A524}
+.card{background:#171C24;border:1px solid #232A35;border-radius:10px;padding:7px 10px;box-sizing:border-box}
+button.card{width:100%;text-align:left;color:inherit;font:inherit;cursor:pointer;display:block}
+.lbl{font-size:9px;color:#9AA4B0;letter-spacing:.04em;text-transform:uppercase;font-weight:600}
+.dim{color:#9AA4B0}
+.bar{height:5px;background:#262D38;border-radius:3px;overflow:hidden}
+.bar i{display:block;height:100%;background:#4FD1B5;border-radius:3px}
+.chip{white-space:nowrap;flex:none;display:inline-flex;align-items:center;gap:3px;height:15px;padding:0 5px;border-radius:8px;font-size:9px;font-weight:700;background:#1F3B36;color:#7FE3CC}
+.chip.warn{background:#3D2E12;color:#F5C26B}
+.chip.gray{background:#232A35;color:#B8C1CC}
+.row{width:100%;display:flex;align-items:center;justify-content:space-between;min-height:36px;border:0;border-bottom:1px solid #1E242E;background:none;color:#E8EAED;font:500 12px Inter,system-ui,sans-serif;padding:0 2px;cursor:pointer;text-align:left;box-sizing:border-box}
+.row:last-child{border-bottom:0}
+.tg{flex:none;width:34px;height:20px;border-radius:10px;background:#2A313C;position:relative}
+.tg::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#AEB7C2;transition:left .15s}
+.tg.on{background:#2FA88F}.tg.on::after{left:17px;background:#fff}
+.hdr{height:34px;flex:none;display:flex;align-items:center;padding:0 6px 0 0;font-size:14px;font-weight:700}
+.back{width:44px;height:34px;border:0;background:none;color:#E8EAED;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.simc{display:flex;align-items:center;gap:8px;min-height:40px}
+.radio{flex:none;width:14px;height:14px;border-radius:50%;border:2px solid #4A5361;box-sizing:border-box}
+.radio.on{border-color:#4FD1B5;background:radial-gradient(#4FD1B5 0 3px,transparent 3.5px)}
+.simc.on{border-color:#2FA88F;background:#14231F}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.tile{height:52px;border-radius:10px;background:#171C24;border:1px solid #232A35;color:#E8EAED;font:600 11px Inter,system-ui,sans-serif;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:3px;padding:0 10px;cursor:pointer;text-align:left}
+.tile span{font-weight:500;font-size:9px;color:#9AA4B0}
+.scrim{position:absolute;inset:0;background:rgba(5,7,10,.72);display:flex;align-items:flex-end}
+.sheet{width:100%;background:#1A2029;border-radius:14px 14px 0 0;padding:14px 12px 12px;box-sizing:border-box;display:flex;flex-direction:column;gap:8px}
+.btns{display:flex;gap:8px}
+.btn{flex:1;height:40px;border-radius:10px;border:1px solid #39424F;background:none;color:#E8EAED;font:700 12px Inter,system-ui,sans-serif;cursor:pointer}
+.btn.pri{background:#2FA88F;border-color:#2FA88F;color:#04140F}
+.btn.danger{border-color:#7A3434;color:#FF9A9A}
+.spin{width:28px;height:28px;border-radius:50%;border:3px solid #2A313C;border-top-color:#4FD1B5;animation:sp 0.8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.msg{width:100%;display:flex;flex-direction:column;gap:2px;padding:7px 2px;border:0;border-bottom:1px solid #1E242E;background:none;color:#E8EAED;text-align:left;cursor:pointer;font-family:Inter,system-ui,sans-serif}
+.msg b{font-size:11px}.msg em{font-style:normal;font-size:10px;color:#9AA4B0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:216px}
+.vpnbtn{width:96px;height:96px;border-radius:50%;border:3px solid #39424F;background:#171C24;color:#9AA4B0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;font:700 11px Inter,system-ui,sans-serif;align-self:center}
+.vpnbtn.on{border-color:#4FD1B5;color:#4FD1B5;background:#14231F}
+.seg{display:flex;background:#171C24;border:1px solid #232A35;border-radius:8px;padding:2px;gap:2px}
+.seg button{flex:1;height:26px;border:0;border-radius:6px;background:none;color:#9AA4B0;font:600 11px Inter,system-ui,sans-serif;cursor:pointer}
+.seg button.on{background:#2A313C;color:#E8EAED}
+.cap{font-size:11px;color:#9AA4B0;text-align:center;line-height:1.35}
+.row.sm{min-height:30px}
+.krow{display:flex;justify-content:center;gap:2px}
+.key{width:21px;height:30px;border:0;border-radius:5px;background:#262D38;color:#E8EAED;font:600 12px Inter,system-ui,sans-serif;cursor:pointer;padding:0}
+.key.w{width:auto;flex:1;font-size:10px}
+.full{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+.legend{width:480px;display:flex;justify-content:space-between;font-size:11px;color:#8B95A1}
+</style>
+</helmet>
+<div class="dev">
+<div class="glass">
+<div class="px">
+
+<sc-if value="{{ asleep }}" hint-placeholder-val="{{ false }}">
+<button aria-label="Wake screen" onClick="{{ wake }}" style="position:absolute;inset:0;border:0;background:#000;cursor:pointer;color:#3A424E;font:500 10px Inter,system-ui,sans-serif">Tap to wake</button>
+</sc-if>
+
+<sc-if value="{{ awake }}" hint-placeholder-val="{{ true }}">
+<div class="scr">
+<div class="sb">
+<div class="sbl">
+<div class="bars" aria-hidden="true"><i style="height:3px"></i><i style="height:5px"></i><i style="height:7px"></i><i class="off" style="height:9px"></i></div>
+<span>{{ tech }}</span>
+<span class="dim">{{ carrier }}</span>
+</div>
+<div class="sbl">
+<sc-if value="{{ vpnOn }}" hint-placeholder-val="{{ false }}"><span class="chip" style="height:13px">VPN</span></sc-if>
+<div class="batt" aria-label="Battery 64 percent"><b>64</b><s></s></div>
+</div>
+</div>
+
+<!-- HOME -->
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<div class="body">
+<div style="display:flex;justify-content:space-between;align-items:flex-start">
+<div>
+<div style="display:flex;align-items:baseline;gap:4px"><span style="font-size:38px;font-weight:800;letter-spacing:-1.5px;line-height:40px">{{ timeMain }}</span><span style="font-size:12px;font-weight:700;color:#9AA4B0">{{ timeAmPm }}</span></div>
+<div style="font-size:11px;color:#9AA4B0;margin-top:1px">{{ dateStr }}</div>
+<sc-if value="{{ hasSig }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px;color:#4FD1B5;font-weight:600;margin-top:2px;max-width:150px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sig }}</div></sc-if>
+<sc-if value="{{ twoClocks }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px;color:#9AA4B0;margin-top:2px">{{ clock2 }} <b style="color:#E8EAED">{{ time2 }}</b></div></sc-if>
+</div>
+<button onClick="{{ goWeather }}" aria-label="Weather in Manila" style="border:0;background:none;color:#E8EAED;cursor:pointer;display:flex;flex-direction:column;align-items:flex-end;gap:1px;padding:4px 0 4px 8px;font-family:Inter,system-ui,sans-serif">
+<svg width="30" height="24" viewBox="0 0 30 24" aria-hidden="true" fill="none" stroke-width="1.8"><circle cx="11" cy="9" r="5" stroke="#F5C26B"></circle><path d="M11 1v1.5M3 9H1.5M5.3 3.3l1 1M16.7 3.3l-1 1" stroke="#F5C26B" stroke-linecap="round"></path><path d="M10 22h13a5 5 0 0 0 0-10 7 7 0 0 0-13 2.5A3.8 3.8 0 0 0 10 22Z" stroke="#C9D1DA" fill="#0E1116"></path></svg>
+<span style="font-size:15px;font-weight:700">{{ wxNow }}</span>
+<span style="font-size:9px;color:#9AA4B0">{{ city }}</span>
+</button>
+</div>
+
+<button class="card" onClick="{{ goSim }}" aria-label="Mobile connection details">
+<div style="display:flex;justify-content:space-between;align-items:center">
+<div style="display:flex;align-items:center;gap:5px"><b style="font-size:13px">{{ activeName }}</b><span class="dim" style="font-size:10px">{{ activeSlot }}</span></div>
+<span class="chip">{{ tech }}</span>
+</div>
+<div style="display:flex;justify-content:space-between;font-size:10px;margin:5px 0 3px"><span>{{ activeUsed }} used</span><span class="dim">{{ activeCapText }}</span></div>
+<div class="bar"><i style="width:{{ activePct }}"></i></div>
+</button>
+
+<div class="grid">
+<button class="card" onClick="{{ goClients }}" aria-label="Connected devices" style="padding:6px 9px">
+<div class="lbl">Devices</div>
+<div style="font-size:16px;font-weight:700;margin-top:1px">{{ online }} <span class="dim" style="font-size:10px;font-weight:500">online</span></div>
+</button>
+<button class="card" onClick="{{ goMonitor }}" aria-label="Live speed" style="padding:6px 9px">
+<div class="lbl">Speed</div>
+<div style="font-size:11px;font-weight:700;margin-top:3px">↓ 24.1 <span class="dim" style="font-weight:500">↑ 3.2</span></div>
+<div class="dim" style="font-size:8px">Mbps</div>
+</button>
+</div>
+
+<div style="display:flex;gap:6px">
+<button class="card" onClick="{{ goVpn }}" style="flex:1;display:flex;align-items:center;gap:6px;padding:0 9px;height:32px">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"></path></svg>
+<span style="font-size:11px;font-weight:600">{{ vpnLabel }}</span>
+</button>
+<button class="card" onClick="{{ goSms }}" style="flex:1;display:flex;align-items:center;gap:6px;padding:0 9px;height:32px">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 7 9 6 9-6"></path></svg>
+<span style="font-size:11px;font-weight:600">Texts</span>
+<sc-if value="{{ hasUnread }}" hint-placeholder-val="{{ true }}"><span class="chip warn" style="margin-left:auto">{{ unread }}</span></sc-if>
+</button>
+</div>
+</div>
+</sc-if>
+
+<!-- SIM -->
+<sc-if value="{{ isSim }}" hint-placeholder-val="{{ false }}">
+<div class="body" style="overflow:hidden;gap:5px">
+<div class="hdr" style="margin:-4px -10px -3px;height:30px"><button class="back" onClick="{{ goHome }}" aria-label="Back to Home" style="height:30px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>Mobile</div>
+<sc-for list="{{ sims }}" as="s" hint-placeholder-count="3">
+<button class="card {{ s.cls }}" onClick="{{ s.pick }}" aria-label="{{ s.aria }}" style="padding:3px 10px">
+<div class="simc" style="min-height:30px">
+<span class="radio {{ s.radio }}"></span>
+<div style="flex:1;min-width:0">
+<div style="display:flex;align-items:center;gap:5px"><b style="font-size:12px">{{ s.name }}</b><span class="dim" style="font-size:9px">{{ s.kind }}</span></div>
+<div class="dim" style="font-size:9px;margin-top:2px">{{ s.capLine }}</div>
+</div>
+<span class="chip {{ s.chipCls }}">{{ s.state }}</span>
+</div>
+</button>
+</sc-for>
+<div class="dim" style="font-size:9px;line-height:1.3;padding:0 2px">SIM2 and eSIM share slot 2 — only one of them can be on.</div>
+<div>
+<button class="row" onClick="{{ toggleData }}" style="min-height:32px"><span>Mobile data</span><span class="tg {{ dataCls }}"></span></button>
+<button class="row" onClick="{{ toggleRoam }}" style="min-height:32px"><span>Data roaming</span><span class="tg {{ roamCls }}"></span></button>
+</div>
+</div>
+</sc-if>
+
+<!-- WIFI -->
+<sc-if value="{{ isWifi }}" hint-placeholder-val="{{ false }}">
+<div class="body">
+<div class="hdr" style="margin:-4px -10px -3px;height:30px"><button class="back" onClick="{{ goHome }}" aria-label="Back to Home" style="height:30px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>Wi-Fi</div>
+<div class="card">
+<div class="lbl">Internet from Wi-Fi</div>
+<div style="display:flex;justify-content:space-between;align-items:center;margin-top:3px">
+<div><b style="font-size:13px">{{ repSsid }}</b><div class="dim" style="font-size:9px;margin-top:1px">Connected · strong signal</div></div>
+<button onClick="{{ goJoin }}" style="height:30px;padding:0 10px;border-radius:8px;border:1px solid #39424F;background:none;color:#E8EAED;font:600 10px Inter,system-ui,sans-serif;cursor:pointer">Change</button>
+</div>
+</div>
+<div>
+<button class="row" onClick="{{ toggle24 }}"><span>2.4 GHz network</span><span class="tg {{ w24Cls }}"></span></button>
+<button class="row" onClick="{{ toggle5 }}"><span>5 GHz network</span><span class="tg {{ w5Cls }}"></span></button>
+<button class="row" onClick="{{ goQr }}"><span>Share Wi-Fi (QR code)</span><span class="dim">›</span></button>
+<button class="row" onClick="{{ goClients }}"><span>Devices connected</span><span><b>{{ online }}</b> <span class="dim">›</span></span></button>
+</div>
+</div>
+</sc-if>
+
+<!-- JOIN NETWORK -->
+<sc-if value="{{ isJoin }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goWifi }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>Join a network</div>
+<div style="padding:0 10px;flex:1;min-height:0">
+<sc-for list="{{ nets }}" as="n" hint-placeholder-count="5">
+<button class="row" onClick="{{ n.pick }}"><span>{{ n.ssid }}</span><span class="dim" style="font-size:10px">{{ n.note }}</span></button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<!-- QR -->
+<sc-if value="{{ isQr }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goWifi }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>Share Wi-Fi</div>
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:8px;padding-top:4px">
+<div role="img" aria-label="QR code placeholder" style="width:132px;height:132px;background:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#5B6470;font-size:10px;font-weight:600">QR code</div>
+<div class="cap">Scan with a phone camera to join<br><b style="color:#E8EAED">GL-E5800-5G</b></div>
+</div>
+</div>
+</sc-if>
+
+<!-- VPN -->
+<sc-if value="{{ isVpn }}" hint-placeholder-val="{{ false }}">
+<div class="body" style="gap:10px">
+<div class="hdr" style="margin:-4px -10px -3px;height:30px"><button class="back" onClick="{{ goHome }}" aria-label="Back to Home" style="height:30px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>VPN</div>
+<button class="vpnbtn {{ vpnCls }}" onClick="{{ toggleVpn }}" aria-label="{{ vpnAria }}">
+<sc-if value="{{ vpnBusy }}" hint-placeholder-val="{{ false }}"><span class="spin"></span></sc-if>
+<sc-if value="{{ vpnIdle }}" hint-placeholder-val="{{ true }}"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3v9"></path><path d="M6.3 7a8 8 0 1 0 11.4 0"></path></svg></sc-if>
+<span>{{ vpnBtnText }}</span>
+</button>
+<div class="cap">{{ vpnCaption }}</div>
+<button class="row card" onClick="{{ goCountry }}" style="border:1px solid #232A35;padding:0 10px"><span>Location</span><span><b>{{ vpnCountry }}</b> <span class="dim">›</span></span></button>
+</div>
+</sc-if>
+
+<!-- COUNTRY -->
+<sc-if value="{{ isCountry }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goVpn }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>VPN location</div>
+<div style="padding:0 10px">
+<sc-for list="{{ countries }}" as="c" hint-placeholder-count="6">
+<button class="row" onClick="{{ c.pick }}"><span>{{ c.name }}</span><span style="color:#4FD1B5;font-weight:700">{{ c.mark }}</span></button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<!-- MORE -->
+<sc-if value="{{ isMore }}" hint-placeholder-val="{{ false }}">
+<div class="body">
+<div class="hdr" style="margin:-4px -10px -3px;height:30px"><button class="back" onClick="{{ goHome }}" aria-label="Back to Home" style="height:30px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>More</div>
+<div style="flex:1;min-height:0;overflow-y:auto;margin:0 -10px;padding:0 10px 4px">
+<button class="row" onClick="{{ toggleAir }}"><span style="display:flex;align-items:center;gap:6px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 21v-6l-7 2v-2l7-5V4a2 2 0 0 1 4 0v6l7 5v2l-7-2v6l2 1v1l-4-1-4 1v-1l2-1Z"></path></svg>Airplane mode</span><span class="tg {{ airCls }}"></span></button>
+<div class="grid" style="margin:6px 0 2px">
+<button class="tile" style="height:40px" onClick="{{ goSms }}">Texts<span>{{ unreadText }}</span></button>
+<button class="tile" style="height:40px" onClick="{{ goWeather }}">Weather<span>{{ city }} · {{ wxNow }}</span></button>
+<button class="tile" style="height:40px" onClick="{{ goMonitor }}">Monitor<span>Speed test inside</span></button>
+<button class="tile" style="height:40px" onClick="{{ goFx }}">Currency<span>{{ fx }} → PHP</span></button>
+</div>
+<div class="lbl" style="padding:8px 2px 0">Router settings</div>
+<sc-for list="{{ moreRows }}" as="m" hint-placeholder-count="10">
+<button class="row" onClick="{{ m.act }}"><span>{{ m.label }}</span><span class="dim" style="font-size:10px">{{ m.value }} ›</span></button>
+</sc-for>
+<div class="btns" style="margin-top:8px">
+<button class="btn" style="height:34px;font-size:10px" onClick="{{ sleep }}">Screen off</button>
+<button class="btn danger" style="height:34px;font-size:10px" onClick="{{ askReboot }}">Reboot</button>
+<button class="btn danger" style="height:34px;font-size:10px" onClick="{{ askShutdown }}">Shut down</button>
+</div>
+</div>
+</div>
+</sc-if>
+
+<!-- TEXTS -->
+<sc-if value="{{ isSms }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goBackFromSms }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>Texts</div>
+<div style="padding:0 10px">
+<sc-for list="{{ msgs }}" as="m" hint-placeholder-count="4">
+<button class="msg" onClick="{{ m.open }}">
+<div style="display:flex;justify-content:space-between;align-items:center;width:100%"><b>{{ m.from }}</b><span style="display:flex;gap:4px;align-items:center"><sc-if value="{{ m.unread }}" hint-placeholder-val="{{ false }}"><span style="width:6px;height:6px;border-radius:50%;background:#F5A524"></span></sc-if><span class="chip gray">{{ m.sim }}</span></span></div>
+<em>{{ m.text }}</em>
+</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<!-- TEXT DETAIL -->
+<sc-if value="{{ isSmsDetail }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goSms }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>{{ cur.from }}</div>
+<div style="padding:0 12px;display:flex;flex-direction:column;gap:6px">
+<div class="dim" style="font-size:9px">{{ cur.when }} · to {{ cur.sim }}</div>
+<div style="font-size:12px;line-height:1.45">{{ cur.text }}</div>
+</div>
+</div>
+</sc-if>
+
+<!-- WEATHER -->
+<sc-if value="{{ isWeather }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goBackSub }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button><span style="flex:1">{{ city }}</span><button onClick="{{ goCityPick }}" style="height:28px;padding:0 10px;border-radius:8px;border:1px solid #39424F;background:none;color:#E8EAED;font:600 10px Inter,system-ui,sans-serif;cursor:pointer">Change city</button></div>
+<div style="padding:0 10px;display:flex;flex-direction:column;gap:8px">
+<div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+<sc-for list="{{ wxDays }}" as="d" hint-placeholder-count="3">
+<div class="card" style="text-align:center;padding:6px 4px"><div class="lbl">{{ d.day }}</div><div style="font-size:15px;font-weight:700;margin-top:3px">{{ d.hi }}</div><div class="dim" style="font-size:9px">{{ d.lo }} · {{ d.rain }}</div></div>
+</sc-for>
+</div>
+<div>
+<div class="row" style="cursor:default"><span>Feels like</span><b>{{ wxFeels }}</b></div>
+<div class="row" style="cursor:default"><span>UV index</span><b>9 · Very high</b></div>
+<div class="row" style="cursor:default"><span>Air quality</span><b>62 · Moderate</b></div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<!-- MONITOR -->
+<sc-if value="{{ isMonitor }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goBackSub }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>Monitor</div>
+<div style="padding:0 10px;display:flex;flex-direction:column;gap:6px">
+<div class="grid">
+<div class="card"><div class="lbl">Download</div><div style="font-size:15px;font-weight:700">24.1 <span class="dim" style="font-size:9px">Mbps</span></div></div>
+<div class="card"><div class="lbl">Upload</div><div style="font-size:15px;font-weight:700">3.2 <span class="dim" style="font-size:9px">Mbps</span></div></div>
+</div>
+<div style="font-size:10px;display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between"><span>CPU</span><span class="dim">6%</span></div><div class="bar"><i style="width:6%"></i></div></div>
+<div style="font-size:10px;display:flex;flex-direction:column;gap:3px"><div style="display:flex;justify-content:space-between"><span>Memory</span><span class="dim">0.6 of 1.6 GB</span></div><div class="bar"><i style="width:38%"></i></div></div>
+<div style="display:flex;justify-content:space-between;font-size:10px"><span>39°C</span><span class="dim">Up 0 h 36 m</span></div>
+<sc-if value="{{ stIdle }}" hint-placeholder-val="{{ true }}">
+<button class="btn" style="height:36px" onClick="{{ startTest }}">Run speed test</button>
+<div class="dim" style="font-size:8px;text-align:center;margin-top:-2px">Uses up to ~330 MB of mobile data</div>
+</sc-if>
+<sc-if value="{{ stRunning }}" hint-placeholder-val="{{ false }}">
+<div class="card" style="display:flex;align-items:center;gap:10px;padding:6px 10px">
+<div style="flex:1"><div class="lbl">{{ stPhase }}</div><div style="font-size:18px;font-weight:800">{{ stVal }} <span class="dim" style="font-size:9px;font-weight:500">Mbps</span></div><div class="bar" style="margin-top:3px"><i style="width:{{ stProg }}"></i></div></div>
+<button class="btn" style="flex:none;width:64px;height:30px;font-size:10px" onClick="{{ stopTest }}">Cancel</button>
+</div>
+</sc-if>
+<sc-if value="{{ stDone }}" hint-placeholder-val="{{ false }}">
+<div class="card" style="display:flex;align-items:center;gap:10px;padding:6px 10px">
+<div style="flex:1"><div style="font-size:12px;font-weight:700">↓ {{ stDown }} <span class="dim" style="font-weight:500">↑ {{ stUp }} Mbps</span></div><div class="dim" style="font-size:8px;margin-top:2px">{{ stUsed }} of mobile data used</div></div>
+<button class="btn" style="flex:none;width:64px;height:30px;font-size:10px" onClick="{{ startTest }}">Again</button>
+</div>
+</sc-if>
+</div>
+</div>
+</sc-if>
+
+<!-- CURRENCY -->
+<sc-if value="{{ isFx }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goMore }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>Currency</div>
+<div style="padding:0 10px;display:flex;flex-direction:column;gap:8px">
+<div class="card" style="padding:10px">
+<div class="dim" style="font-size:11px">{{ fxName }}</div>
+<div style="font-size:26px;font-weight:800;letter-spacing:-.5px;margin-top:2px">{{ fxRate }} <span style="font-size:13px;font-weight:700;color:#9AA4B0">PHP</span></div>
+<div class="dim" style="font-size:9px;margin-top:3px">1 PHP = {{ fxInv }} · ECB rate, 23 Nov</div>
+</div>
+<div class="seg">
+<sc-for list="{{ fxOpts }}" as="f" hint-placeholder-count="5"><button class="{{ f.cls }}" onClick="{{ f.pick }}">{{ f.code }}</button></sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<!-- SETTINGS -->
+<sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goMore }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>Dashboard</div>
+<div style="padding:0 10px;display:flex;flex-direction:column;gap:5px">
+<div class="lbl">Clocks on home</div>
+<div class="seg"><button class="{{ one }}" onClick="{{ setOne }}">One</button><button class="{{ two }}" onClick="{{ setTwo }}">Two</button></div>
+<div>
+<button class="row" onClick="{{ goClockPick }}"><span>Second clock</span><span><b>{{ clock2 }}</b> <span class="dim">›</span></span></button>
+<button class="row" onClick="{{ toggle24h }}"><span>24-hour time</span><span class="tg {{ h24Cls }}"></span></button>
+<button class="row" onClick="{{ askStock }}"><span>Switch to stock screen</span><span class="dim">›</span></button>
+</div>
+<div class="btns"><button class="btn danger" style="height:34px" onClick="{{ askReboot }}">Reboot</button><button class="btn danger" style="height:34px" onClick="{{ askShutdown }}">Shut down</button></div>
+</div>
+</div>
+</sc-if>
+
+<!-- GENERIC SETTINGS SCREEN -->
+<sc-if value="{{ isSet }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ setBack }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>{{ setTitle }}</div>
+<div style="padding:0 10px 8px;flex:1;min-height:0;overflow-y:auto">
+<sc-for list="{{ setItems }}" as="it" hint-placeholder-count="6">
+<sc-if value="{{ it.isHead }}" hint-placeholder-val="{{ false }}"><div class="lbl" style="padding:8px 2px 2px">{{ it.label }}</div></sc-if>
+<sc-if value="{{ it.isToggle }}" hint-placeholder-val="{{ false }}"><button class="row" onClick="{{ it.act }}"><span>{{ it.label }}</span><span class="tg {{ it.cls }}"></span></button></sc-if>
+<sc-if value="{{ it.isValue }}" hint-placeholder-val="{{ true }}"><div class="row" style="cursor:default"><span>{{ it.label }}</span><b style="font-size:11px">{{ it.value }}</b></div></sc-if>
+<sc-if value="{{ it.isLink }}" hint-placeholder-val="{{ false }}"><button class="row" onClick="{{ it.act }}"><span>{{ it.label }}</span><span class="dim" style="font-size:10px">{{ it.value }} ›</span></button></sc-if>
+<sc-if value="{{ it.isSeg }}" hint-placeholder-val="{{ false }}"><div style="padding:6px 0 5px;border-bottom:1px solid #1E242E"><div style="font-size:11px;font-weight:500;margin-bottom:4px">{{ it.label }}</div><div class="seg"><sc-for list="{{ it.opts }}" as="o" hint-placeholder-count="3"><button class="{{ o.cls }}" onClick="{{ o.pick }}" style="font-size:10px">{{ o.label }}</button></sc-for></div></div></sc-if>
+<sc-if value="{{ it.isNote }}" hint-placeholder-val="{{ false }}"><div class="dim" style="font-size:9px;line-height:1.35;padding:6px 2px">{{ it.label }}</div></sc-if>
+<sc-if value="{{ it.isBtn }}" hint-placeholder-val="{{ false }}"><button class="btn {{ it.cls }}" style="height:34px;width:100%;margin-top:8px" onClick="{{ it.act }}">{{ it.label }}</button></sc-if>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<!-- PASSCODE PAD -->
+<sc-if value="{{ isPin }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ pinBack }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>New passcode</div>
+<div style="display:flex;justify-content:center;gap:12px;padding:6px 0 12px">
+<sc-for list="{{ pinDots }}" as="d" hint-placeholder-count="4"><span style="width:12px;height:12px;border-radius:50%;border:2px solid #4FD1B5;box-sizing:border-box;background:{{ d.fill }}"></span></sc-for>
+</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:0 24px">
+<sc-for list="{{ pinKeys }}" as="k" hint-placeholder-count="12"><button class="key" style="width:auto;height:36px;font-size:15px;opacity:{{ k.op }}" onClick="{{ k.press }}" aria-label="{{ k.aria }}">{{ k.ch }}</button></sc-for>
+</div>
+</div>
+</sc-if>
+
+<!-- WEATHER CITY -->
+<sc-if value="{{ isCityPick }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goWeatherBack }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>Weather city</div>
+<div style="padding:0 8px;display:flex;flex-direction:column;gap:4px;flex:1;min-height:0">
+<div class="card" style="height:28px;display:flex;align-items:center;gap:6px;padding:0 8px;font-size:12px;font-weight:600"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9AA4B0" stroke-width="2.6" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg><span class="{{ qCls }}">{{ qShown }}</span><span style="display:inline-block;width:1px;height:14px;background:#4FD1B5;margin-left:-5px"></span></div>
+<div style="height:90px;overflow:hidden">
+<div class="lbl" style="padding:2px 2px 0">{{ cityListLabel }}</div>
+<sc-for list="{{ cityResults }}" as="c" hint-placeholder-count="3">
+<button class="row" style="min-height:26px;font-size:11px" onClick="{{ c.pick }}"><span>{{ c.name }} <span class="dim" style="font-size:9px">{{ c.country }}</span></span><span style="color:#4FD1B5;font-weight:700">{{ c.mark }}</span></button>
+</sc-for>
+<sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div class="dim" style="font-size:10px;padding:8px 2px;line-height:1.35">No match in this demo's sample list. The real screen searches every city worldwide.</div></sc-if>
+</div>
+<sc-for list="{{ cityKb }}" as="r" hint-placeholder-count="3">
+<div class="krow"><sc-for list="{{ r.keys }}" as="k" hint-placeholder-count="10"><button class="key" style="height:28px" onClick="{{ k.press }}">{{ k.ch }}</button></sc-for></div>
+</sc-for>
+<div class="krow"><button class="key w" style="height:28px" onClick="{{ qSpace }}">space</button><button class="key w" style="flex:0 0 44px;height:28px" onClick="{{ qDel }}" aria-label="Delete">⌫</button></div>
+</div>
+</div>
+</sc-if>
+
+<!-- SECOND CLOCK CITY -->
+<sc-if value="{{ isClockPick }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goSettings }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>Second clock</div>
+<div style="padding:0 10px">
+<sc-for list="{{ clockOpts }}" as="c" hint-placeholder-count="8">
+<button class="row sm" onClick="{{ c.pick }}"><span>{{ c.name }}</span><span class="dim" style="font-size:10px">{{ c.time }} <b style="color:#4FD1B5">{{ c.mark }}</b></span></button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<!-- SIM DETAIL / DATA CAP -->
+<sc-if value="{{ isSimDetail }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ goSim }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button>{{ activeName }} <span class="dim" style="font-size:10px;font-weight:500;margin-left:5px">{{ activeSlot }}</span></div>
+<div style="padding:0 10px;display:flex;flex-direction:column;gap:5px">
+<div style="display:flex;justify-content:space-between;font-size:11px"><b>{{ activeUsed }} used</b><span class="dim">{{ activeCapText }}</span></div>
+<div class="bar"><i style="width:{{ activePct }}"></i></div>
+<div class="lbl" style="margin-top:4px">Monthly data cap</div>
+<div>
+<sc-for list="{{ capOpts }}" as="c" hint-placeholder-count="6">
+<button class="row sm" onClick="{{ c.pick }}"><span>{{ c.label }}</span><span style="color:#4FD1B5;font-weight:700">{{ c.mark }}</span></button>
+</sc-for>
+</div>
+</div>
+</div>
+</sc-if>
+
+<!-- WI-FI PASSWORD KEYBOARD -->
+<sc-if value="{{ isKb }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;flex:1;min-height:0">
+<div class="hdr"><button class="back" onClick="{{ kbBack }}" aria-label="Back"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg></button><span style="font-size:12px">{{ kbTitle }}</span></div>
+<div style="padding:0 8px;display:flex;flex-direction:column;gap:4px">
+<div class="card" style="height:30px;display:flex;align-items:center;font-size:13px;font-weight:600;letter-spacing:.5px;padding:0 8px">{{ pwShown }}<span style="display:inline-block;width:1px;height:15px;background:#4FD1B5;margin-left:1px"></span></div>
+<div class="dim" style="font-size:8px;height:10px">{{ pwHint }}</div>
+<sc-for list="{{ kbRows }}" as="r" hint-placeholder-count="3">
+<div class="krow"><sc-for list="{{ r.keys }}" as="k" hint-placeholder-count="10"><button class="key" onClick="{{ k.press }}">{{ k.ch }}</button></sc-for></div>
+</sc-for>
+<div class="krow" style="margin-top:2px">
+<button class="key w" onClick="{{ kbShift }}" style="flex:0 0 32px;background:{{ shiftBg }}" aria-label="Shift">⇧</button>
+<button class="key w" onClick="{{ kbMode }}" style="flex:0 0 36px">{{ kbModeLabel }}</button>
+<button class="key w" onClick="{{ kbSpace }}">space</button>
+<button class="key w" onClick="{{ kbDel }}" style="flex:0 0 36px" aria-label="Delete">⌫</button>
+</div>
+<button class="btn pri" style="height:32px;margin-top:2px;opacity:{{ kbConnectOpacity }}" onClick="{{ kbConnect }}">{{ kbAction }}</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ showTabs }}" hint-placeholder-val="{{ true }}">
+<div class="tabs">
+<button class="tab {{ tabHomeCls }}" onClick="{{ tabHome }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9Z"></path></svg><span>Home</span></button>
+<button class="tab {{ tabSimCls }}" onClick="{{ tabSim }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 3h7l5 5v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"></path><rect x="9" y="11" width="7" height="6" rx="1"></rect></svg><span>SIM</span></button>
+<button class="tab {{ tabWifiCls }}" onClick="{{ tabWifi }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"></path><circle cx="12" cy="19.5" r="1" fill="currentColor"></circle></svg><span>Wi-Fi</span></button>
+<button class="tab {{ tabVpnCls }}" onClick="{{ tabVpn }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z"></path></svg><span>VPN</span></button>
+<button class="tab {{ tabMoreCls }}" onClick="{{ tabMore }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"></rect><rect x="14" y="4" width="6" height="6" rx="1.5"></rect><rect x="4" y="14" width="6" height="6" rx="1.5"></rect><rect x="14" y="14" width="6" height="6" rx="1.5"></rect></svg><span>More</span><sc-if value="{{ moreDot }}" hint-placeholder-val="{{ false }}"><span class="dot"></span></sc-if></button>
+</div>
+</sc-if>
+</div>
+
+<!-- SIM SWITCH SHEET -->
+<sc-if value="{{ showSheet }}" hint-placeholder-val="{{ false }}">
+<div class="scrim">
+<div class="sheet">
+<b style="font-size:13px">Switch to {{ pendName }}?</b>
+<div class="dim" style="font-size:10px;line-height:1.4">{{ pendNote }}</div>
+<div class="btns"><button class="btn" onClick="{{ cancelSheet }}">Cancel</button><button class="btn pri" onClick="{{ confirmSheet }}">Switch</button></div>
+</div>
+</div>
+</sc-if>
+
+<!-- STOCK SHEET -->
+<sc-if value="{{ showStock }}" hint-placeholder-val="{{ false }}">
+<div class="scrim">
+<div class="sheet">
+<b style="font-size:13px">Switch to the stock screen?</b>
+<div class="dim" style="font-size:10px;line-height:1.4">Hold the power button for 1 second to come back.</div>
+<div class="btns"><button class="btn" onClick="{{ cancelStock }}">Cancel</button><button class="btn pri" onClick="{{ goStock }}">Switch</button></div>
+</div>
+</div>
+</sc-if>
+
+<!-- SWITCHING OVERLAY -->
+<sc-if value="{{ switching }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:rgba(14,17,22,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px">
+<span class="spin"></span>
+<b style="font-size:13px">Switching to {{ pendName }}</b>
+<div class="cap" style="padding:0 24px">Internet is paused while the modem reconnects. Usually under a minute.</div>
+</div>
+</sc-if>
+
+<!-- JOINING WI-FI -->
+<sc-if value="{{ isJoining }}" hint-placeholder-val="{{ false }}">
+<div class="full" style="background:rgba(14,17,22,.94)">
+<span class="spin"></span>
+<b style="font-size:13px">Joining {{ joiningName }}</b>
+<div class="cap" style="padding:0 24px">Internet switches to this Wi-Fi once connected.</div>
+</div>
+</sc-if>
+
+<!-- POWER SHEET -->
+<sc-if value="{{ showPowerSheet }}" hint-placeholder-val="{{ false }}">
+<div class="scrim">
+<div class="sheet">
+<b style="font-size:13px">{{ powerTitle }}</b>
+<div class="dim" style="font-size:10px;line-height:1.4">{{ powerNote }}</div>
+<div class="btns"><button class="btn" onClick="{{ cancelPower }}">Cancel</button><button class="btn danger" onClick="{{ confirmPower }}">{{ powerYes }}</button></div>
+</div>
+</div>
+</sc-if>
+
+<!-- REBOOTING -->
+<sc-if value="{{ isRebooting }}" hint-placeholder-val="{{ false }}">
+<div class="full" style="background:#0E1116">
+<span class="spin"></span>
+<b style="font-size:13px">Restarting</b>
+<div class="cap" style="padding:0 24px">Wi-Fi and internet come back in about a minute.</div>
+</div>
+</sc-if>
+
+<!-- POWERED OFF -->
+<sc-if value="{{ isOff }}" hint-placeholder-val="{{ false }}">
+<button class="full" onClick="{{ powerOn }}" style="border:0;background:#000;color:#3A424E;cursor:pointer;font:500 10px Inter,system-ui,sans-serif">Router is off · press power to turn on</button>
+</sc-if>
+
+<!-- STOCK SCREEN STAND-IN -->
+<sc-if value="{{ isStockMode }}" hint-placeholder-val="{{ false }}">
+<div class="full" style="background:#1B1F27">
+<b style="font-size:13px">Stock GL.iNet screen</b>
+<div class="cap" style="padding:0 24px">Hold the power button for 1 second to return to this dashboard.</div>
+<button class="btn" style="flex:none;width:150px;height:34px;font-size:10px" onClick="{{ exitStock }}">Hold power (demo)</button>
+</div>
+</sc-if>
+
+<!-- LOCK SCREEN -->
+<sc-if value="{{ isLocked }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;inset:0;background:#0B0E13;display:flex;flex-direction:column;touch-action:none" onPointerDown="{{ lockDown }}" onPointerUp="{{ lockUp }}">
+<div class="sb">
+<div class="sbl"><div class="bars" aria-hidden="true"><i style="height:3px"></i><i style="height:5px"></i><i style="height:7px"></i><i class="off" style="height:9px"></i></div><span>{{ tech }}</span><span class="dim">{{ carrier }}</span></div>
+<div class="sbl"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#C9D1DA" stroke-width="2.6" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg><div class="batt" aria-label="Battery 64 percent"><b>64</b><s></s></div></div>
+</div>
+
+<sc-if value="{{ lockFace }}" hint-placeholder-val="{{ true }}">
+<div style="flex:1;display:flex;flex-direction:column;padding:0 14px">
+<sc-if value="{{ lockClock }}" hint-placeholder-val="{{ true }}">
+<div style="text-align:center;margin-top:26px">
+<div style="display:flex;align-items:baseline;justify-content:center;gap:4px"><span style="font-size:54px;font-weight:800;letter-spacing:-2px;line-height:56px">{{ timeMain }}</span><span style="font-size:13px;font-weight:700;color:#9AA4B0">{{ timeAmPm }}</span></div>
+<div style="font-size:12px;color:#9AA4B0;margin-top:2px">{{ dateStr }}</div>
+<sc-if value="{{ hasSig }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px;color:#4FD1B5;font-weight:600;margin-top:6px">{{ sig }}</div></sc-if>
+</div>
+</sc-if>
+<sc-if value="{{ lockStatus }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:6px;margin-top:10px">
+<div style="display:flex;align-items:baseline;gap:4px"><span style="font-size:28px;font-weight:800;letter-spacing:-1px">{{ timeMain }}</span><span style="font-size:11px;font-weight:700;color:#9AA4B0">{{ timeAmPm }}</span><div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:1px;min-width:0;max-width:110px"><span style="font-size:10px;color:#9AA4B0;white-space:nowrap">{{ dateStr }}</span><sc-if value="{{ hasSig }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px;color:#4FD1B5;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">{{ sig }}</span></sc-if></div></div>
+<div class="card"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:4px"><b>{{ activeName }} · {{ activeUsed }} used</b><span class="dim">{{ activeCapText }}</span></div><div class="bar"><i style="width:{{ activePct }}"></i></div></div>
+<div class="grid"><div class="card" style="padding:6px 9px"><div class="lbl">Devices</div><div style="font-size:15px;font-weight:700">{{ online }}</div></div><div class="card" style="padding:6px 9px"><div class="lbl">Speed</div><div style="font-size:11px;font-weight:700;margin-top:3px">↓ 24.1 <span class="dim">↑ 3.2</span></div></div></div>
+</div>
+</sc-if>
+<div style="flex:1"></div>
+<div style="display:flex;justify-content:center;gap:6px;margin-bottom:8px">
+<sc-if value="{{ hasUnread }}" hint-placeholder-val="{{ true }}"><span class="chip warn">{{ unread }} texts</span></sc-if>
+<sc-if value="{{ vpnOn }}" hint-placeholder-val="{{ false }}"><span class="chip">VPN on</span></sc-if>
+<span class="chip gray">{{ wxNow }} {{ city }}</span>
+</div>
+<button onClick="{{ lockTap }}" style="height:44px;border:0;background:none;color:#9AA4B0;font:600 10px Inter,system-ui,sans-serif;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;margin:0 -14px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m6 15 6-6 6 6"></path></svg>{{ lockHint }}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ lockPad }}" hint-placeholder-val="{{ false }}">
+<div style="flex:1;display:flex;flex-direction:column;align-items:center;padding-top:6px">
+<b style="font-size:13px">Enter passcode</b>
+<div style="display:flex;justify-content:center;gap:12px;padding:10px 0 6px">
+<sc-for list="{{ uDots }}" as="d" hint-placeholder-count="4"><span style="width:12px;height:12px;border-radius:50%;border:2px solid #4FD1B5;box-sizing:border-box;background:{{ d.fill }}"></span></sc-for>
+</div>
+<div style="font-size:9px;height:12px;color:{{ uErrColor }}">{{ uMsg }}</div>
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:6px 26px 0;width:100%;box-sizing:border-box">
+<sc-for list="{{ ulKeys }}" as="k" hint-placeholder-count="12"><button class="key" style="width:auto;height:36px;font-size:{{ k.fs }};opacity:{{ k.op }}" onClick="{{ k.press }}" aria-label="{{ k.aria }}">{{ k.ch }}</button></sc-for>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-if>
+</sc-if>
+
+</div>
+</div>
+<div class="legend"><span>GL-E5800 · 240 × 320 shown at 2×</span><span>Tap anything — it works</span></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":528,"height":720}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      screen: 'home', from: 'home', sim: 'sim1', pend: null, switching: false,
+      data: true, roam: false, w24: true, w5: true, rep: 'Hotel_Lobby',
+      vpn: false, vpnBusy: false, country: 'Singapore',
+      read: {}, cur: 0, two: false, h24: false, asleep: false, stock: false, now: Date.now(),
+      fx: 'USD', st: 'idle', stVal: 0, stProg: 0, stDown: 0, stUp: 0, sheet2: null, power: null, stockMode: false,
+      city: 'Manila', clock2: 'Tokyo', kbFor: '', pw: '', digits: false, joining: null, caps: { sim1: 20, sim2: 25, esim: 5 },
+      sig: '', kbTarget: 'wifi', shift: false, q: '', recent: ['Manila', 'Cebu', 'Tokyo'],
+      locked: false, lockStage: 'face', ubuf: '', uerr: '', tries: 0, lockUntil: 0,
+      air: false, setKey: 'clients', pin: '', pinBuf: '', blocked: {},
+      c: { accel: false, ethMode: 'WAN', guest: false, iot: false, bright: 'Medium', wake: 'Clock', passOn: false, autoLock: '1 min', alwaysOn: false,
+        chargerOn: true, standby: false, wifiIdle: 'Never', ethIdle: 'Never', usbMode: 'Ask me', usbProto: 'USB 3.0', dataDir: 'Input', powerDir: 'Input',
+        thresh: '20%', agh: false, fan: 'Auto' }
+    };
+  }
+  componentDidMount() { this.t = setInterval(() => this.setState({ now: Date.now() }), 15000); }
+  componentWillUnmount() { clearInterval(this.t); clearInterval(this.st); clearInterval(this.lt); }
+  unlockStart() {
+    const st = this.state;
+    if (st.c.passOn && st.pin) this.setState({ lockStage: 'pad', ubuf: '', uerr: '' });
+    else this.setState({ locked: false, lockStage: 'face', screen: 'home' });
+  }
+  unlockKey(ch) {
+    const st = this.state;
+    if (ch === 'Back') { this.setState({ lockStage: 'face', ubuf: '', uerr: '' }); return; }
+    if (st.lockUntil > Date.now()) return;
+    if (ch === '⌫') { this.setState({ ubuf: st.ubuf.slice(0, -1) }); return; }
+    const nb = st.ubuf + ch;
+    if (nb.length < 4) { this.setState({ ubuf: nb, uerr: '' }); return; }
+    if (nb === st.pin) { this.setState({ locked: false, lockStage: 'face', ubuf: '', uerr: '', tries: 0, screen: 'home' }); return; }
+    const tries = st.tries + 1;
+    if (tries >= 5) {
+      this.setState({ ubuf: '', tries, lockUntil: Date.now() + 30000, uerr: '' });
+      clearInterval(this.lt);
+      this.lt = setInterval(() => {
+        if (Date.now() >= this.state.lockUntil) { clearInterval(this.lt); this.setState({ lockUntil: 0, tries: 0 }); }
+        else this.forceUpdate();
+      }, 1000);
+    } else this.setState({ ubuf: '', tries, uerr: 'Wrong passcode · ' + (5 - tries) + ' tries left' });
+  }
+  startTest() {
+    if (this.state.st === 'down' || this.state.st === 'up') return;
+    let n = 0;
+    const dT = 30 + Math.random() * 15, uT = 4 + Math.random() * 4;
+    clearInterval(this.st);
+    this.setState({ st: 'down', stVal: 0, stProg: 0, stDown: 0, stUp: 0 });
+    this.st = setInterval(() => {
+      n += 1;
+      if (n <= 24) { const v = dT * Math.min(1, n / 8) * (0.92 + Math.random() * 0.16); this.setState({ st: 'down', stVal: v, stProg: n / 48, stDown: v }); }
+      else if (n <= 48) { const m = n - 24; const v = uT * Math.min(1, m / 8) * (0.9 + Math.random() * 0.2); this.setState({ st: 'up', stVal: v, stProg: n / 48, stUp: v }); }
+      else { clearInterval(this.st); this.setState({ st: 'done' }); }
+    }, 160);
+  }
+  stopTest() { clearInterval(this.st); this.setState({ st: 'idle' }); }
+  join(ssid) {
+    this.setState({ joining: ssid });
+    setTimeout(() => this.setState({ joining: null, rep: ssid, screen: 'wifi', pw: '' }), 1500);
+  }
+  fmt(tz) {
+    const parts = new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit', hour12: !this.state.h24, timeZone: tz }).formatToParts(new Date(this.state.now));
+    const g = (k) => (parts.find((p) => p.type === k) || {}).value || '';
+    return { main: g('hour') + ':' + g('minute'), ap: g('dayPeriod') };
+  }
+  renderVals() {
+    const s = this.state;
+    const go = (screen) => () => this.setState({ screen, from: ['home', 'more'].includes(s.screen) ? s.screen : s.from });
+    const SIMS = {
+      sim1: { name: 'Smart', kind: 'SIM1 · physical', slot: 'SIM1', used: '4.7 GB', cap: '20 GB', pct: '24%', note: 'SIM1 · Smart. Internet pauses about 30 seconds while the modem reconnects.' },
+      sim2: { name: 'DITO', kind: 'SIM2 · physical', slot: 'SIM2', used: '1.2 GB', cap: '25 GB', pct: '5%', note: 'SIM2 · DITO. Internet pauses about 30 seconds while the modem reconnects.' },
+      esim: { name: 'Travel eSIM', kind: 'eSIM · slot 2', slot: 'eSIM', used: '0.3 GB', cap: '5 GB', pct: '6%', note: 'Your eSIM uses slot 2, so SIM2 (DITO) turns off. Internet pauses about a minute.' }
+    };
+    const USED = { sim1: 4.7, sim2: 1.2, esim: 0.3 };
+    Object.keys(SIMS).forEach((k) => {
+      const c = s.caps[k]; const x = SIMS[k];
+      x.used = USED[k] + ' GB';
+      x.capText = c ? 'of ' + c + ' GB' : 'no cap set';
+      x.pct = c ? Math.min(100, Math.round(USED[k] / c * 100)) + '%' : '0%';
+      x.capLine = c ? x.used + ' of ' + c + ' GB this month' : x.used + ' used this month · no cap';
+    });
+    const a = SIMS[s.sim];
+    const sims = ['sim1', 'sim2', 'esim'].map((k) => {
+      const on = s.sim === k; const x = SIMS[k];
+      const blocked = !on && ((k === 'sim2' && s.sim === 'esim') || (k === 'esim' && s.sim === 'sim2'));
+      return { ...x, cls: on ? 'on' : '', radio: on ? 'on' : '', state: on ? 'In use ›' : (blocked ? 'Slot 2 busy' : 'Ready'), chipCls: on ? '' : 'gray',
+        aria: x.name + (on ? ', in use, tap for data cap' : ', tap to switch'),
+        pick: () => { if (on) this.setState({ screen: 'simDetail' }); else this.setState({ pend: k }); } };
+    });
+    const MSGS = [
+      { from: 'DITO', sim: 'SIM2', when: 'Mon 23 Nov, 10:16 AM', text: 'Your FREE DITO SIM Starter Pack is still waiting for you! Claim it in the DITO app.' },
+      { from: '+63 917 ••• 4821', sim: 'SIM1', when: 'Mon 23 Nov, 9:02 AM', text: 'Your verification code is 482913. It expires in 5 minutes.' },
+      { from: 'Smart', sim: 'SIM1', when: 'Sun 22 Nov, 6:40 PM', text: 'You have used 80% of your 20 GB data allocation.' },
+      { from: 'Smart', sim: 'SIM1', when: 'Fri 20 Nov, 8:15 AM', text: 'Your Magic Data 20GB promo is now active.' }
+    ];
+    const unread = MSGS.filter((m, i) => i < 2 && !s.read[i]).length;
+    const msgs = MSGS.map((m, i) => ({ ...m, unread: i < 2 && !s.read[i], open: () => this.setState({ screen: 'smsDetail', cur: i, read: { ...s.read, [i]: true } }) }));
+    const tabDefs = [['home', 'Home'], ['sim', 'SIM'], ['wifi', 'Wi-Fi'], ['vpn', 'VPN'], ['more', 'More']];
+    const tabOf = { home: 'home', sim: 'sim', wifi: 'wifi', join: 'wifi', qr: 'wifi', vpn: 'vpn', country: 'vpn' };
+    const curTab = tabOf[s.screen] || 'more';
+    const tabs = tabDefs.map(([k, label]) => ({ label, cls: curTab === k ? 'on' : '', go: () => this.setState({ screen: k }),
+      isHome: k === 'home', isSim: k === 'sim', isWifi: k === 'wifi', isVpn: k === 'vpn', isMore: k === 'more', dot: k === 'more' && unread > 0 }));
+    const nets = [['Hotel_Lobby', 'Password'], ['Hotel_Guest_5G', 'Open'], ['Starbucks WiFi', 'Open'], ['PLDTHOMEFIBR_2a', 'Password'], ['Globe_LTE_Mifi', 'Password']]
+      .map(([ssid, note]) => ({ ssid, note: ssid === s.rep ? 'Connected' : note,
+        pick: () => { if (ssid === s.rep) return; if (note === 'Password') this.setState({ screen: 'kb', kbTarget: 'wifi', kbFor: ssid, pw: '', digits: false, shift: false }); else this.join(ssid); } }));
+    const WX = { Manila: [31, 26], 'Quezon City': [31, 25], Makati: [31, 26], Cebu: [30, 25], Davao: [31, 24], Baguio: [22, 15], Iloilo: [31, 25], Tagaytay: [26, 20] };
+    const CITYDB = ['Manila|Philippines|14.6', 'Quezon City|Philippines|14.7', 'Makati|Philippines|14.6', 'Cebu|Philippines|10.3', 'Davao|Philippines|7.2',
+      'Baguio|Philippines|16.4', 'Iloilo|Philippines|10.7', 'Tagaytay|Philippines|14.1', 'Bacolod|Philippines|10.7', 'Cagayan de Oro|Philippines|8.5',
+      'Zamboanga|Philippines|6.9', 'Puerto Princesa|Philippines|9.7', 'Dumaguete|Philippines|9.3', 'General Santos|Philippines|6.1', 'Boracay|Philippines|11.9',
+      'Tokyo|Japan|35.7', 'Osaka|Japan|34.7', 'Kyoto|Japan|35.0', 'Sapporo|Japan|43.1', 'Fukuoka|Japan|33.6', 'Seoul|South Korea|37.6', 'Busan|South Korea|35.2',
+      'Beijing|China|39.9', 'Shanghai|China|31.2', 'Shenzhen|China|22.5', 'Hong Kong|Hong Kong|22.3', 'Macau|Macau|22.2', 'Taipei|Taiwan|25.0',
+      'Singapore|Singapore|1.35', 'Bangkok|Thailand|13.8', 'Chiang Mai|Thailand|18.8', 'Phuket|Thailand|7.9', 'Hanoi|Vietnam|21.0',
+      'Ho Chi Minh City|Vietnam|10.8', 'Da Nang|Vietnam|16.1', 'Kuala Lumpur|Malaysia|3.1', 'Penang|Malaysia|5.4', 'Kota Kinabalu|Malaysia|6.0',
+      'Jakarta|Indonesia|-6.2', 'Denpasar (Bali)|Indonesia|-8.7', 'Phnom Penh|Cambodia|11.6', 'Mumbai|India|19.1', 'Delhi|India|28.6', 'Bangalore|India|13.0',
+      'Dubai|United Arab Emirates|25.2', 'Abu Dhabi|United Arab Emirates|24.5', 'Doha|Qatar|25.3', 'Riyadh|Saudi Arabia|24.7', 'Istanbul|Turkey|41.0',
+      'Cairo|Egypt|30.0', 'Cape Town|South Africa|-33.9', 'Nairobi|Kenya|-1.3', 'Sydney|Australia|-33.9', 'Melbourne|Australia|-37.8', 'Brisbane|Australia|-27.5',
+      'Perth|Australia|-31.9', 'Auckland|New Zealand|-36.8', 'New York|United States|40.7', 'Los Angeles|United States|34.1', 'San Francisco|United States|37.8',
+      'Chicago|United States|41.9', 'Honolulu|United States|21.3', 'Las Vegas|United States|36.2', 'Seattle|United States|47.6', 'Guam|United States|13.4',
+      'Toronto|Canada|43.7', 'Vancouver|Canada|49.3', 'Montreal|Canada|45.5', 'Calgary|Canada|51.0', 'Mexico City|Mexico|19.4', 'Cancun|Mexico|21.2',
+      'London|United Kingdom|51.5', 'Manchester|United Kingdom|53.5', 'Edinburgh|United Kingdom|55.9', 'Dublin|Ireland|53.3', 'Paris|France|48.9', 'Nice|France|43.7',
+      'Berlin|Germany|52.5', 'Munich|Germany|48.1', 'Rome|Italy|41.9', 'Milan|Italy|45.5', 'Madrid|Spain|40.4', 'Barcelona|Spain|41.4', 'Lisbon|Portugal|38.7',
+      'Amsterdam|Netherlands|52.4', 'Zurich|Switzerland|47.4', 'Vienna|Austria|48.2', 'Athens|Greece|38.0', 'Stockholm|Sweden|59.3',
+      'Sao Paulo|Brazil|-23.5', 'Rio de Janeiro|Brazil|-22.9', 'Buenos Aires|Argentina|-34.6', 'Lima|Peru|-12.0']
+      .map((str) => { const p = str.split('|'); return { name: p[0], country: p[1], lat: +p[2] }; });
+    const findC = (n) => CITYDB.find((c) => c.name === n);
+    const climate = (n) => {
+      if (WX[n]) return WX[n];
+      const c = findC(n); const L = c ? c.lat : 15;
+      const hi = Math.round(L >= 0 ? 31 - Math.max(0, L - 15) * 0.75 : 31 - Math.max(0, -L - 15) * 0.35);
+      return [hi, hi - 8];
+    };
+    const w = climate(s.city);
+    const dayName = (off) => new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'Asia/Manila' }).format(new Date(s.now + off * 86400000));
+    const wxDays = [[0, 0, '20%'], [1, 1, '10%'], [2, -1, '60%']].map(([off, d, rain]) => ({ day: off === 0 ? 'Today' : dayName(off), hi: (w[0] + d) + '°', lo: (w[1] + Math.min(0, d)) + '°', rain }));
+    const qn = s.q.trim().toLowerCase();
+    const matches = qn
+      ? CITYDB.filter((c) => c.name.toLowerCase().includes(qn) || c.country.toLowerCase().startsWith(qn))
+        .sort((x, y) => (x.name.toLowerCase().startsWith(qn) ? 0 : 1) - (y.name.toLowerCase().startsWith(qn) ? 0 : 1)).slice(0, 3)
+      : s.recent.map((n) => findC(n) || { name: n, country: '' });
+    const cityResults = matches.map((c) => ({ name: c.name, country: c.country, mark: c.name === s.city ? '✓' : '',
+      pick: () => this.setState({ city: c.name, screen: 'weather', q: '', recent: [c.name, ...this.state.recent.filter((x) => x !== c.name)].slice(0, 3) }) }));
+    const cityKb = ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'].map((r) => ({ keys: r.split('').map((ch) => ({ ch, press: () => this.setState({ q: (this.state.q + ch).slice(0, 24) }) })) }));
+    const CLOCKS = { Tokyo: 'Asia/Tokyo', Singapore: 'Asia/Singapore', Sydney: 'Australia/Sydney', Dubai: 'Asia/Dubai', London: 'Europe/London', 'New York': 'America/New_York', 'Los Angeles': 'America/Los_Angeles', Toronto: 'America/Toronto' };
+    const clockOpts = Object.keys(CLOCKS).map((name) => { const t = this.fmt(CLOCKS[name]); return { name, time: t.main + (t.ap ? ' ' + t.ap : ''), mark: name === s.clock2 ? '✓' : '', pick: () => this.setState({ clock2: name, two: true, screen: 'settings' }) }; });
+    const capOpts = [null, 5, 10, 20, 25, 50].map((c) => ({ label: c ? c + ' GB' : 'No cap', mark: s.caps[s.sim] === c ? '✓' : '', pick: () => this.setState({ caps: { ...s.caps, [s.sim]: c } }) }));
+    const FX = { USD: ['1 US Dollar', 63.855], SGD: ['1 Singapore Dollar', 49.456], JPY: ['100 Japanese Yen', 40.142], EUR: ['1 Euro', 69.851], CNY: ['1 Chinese Yuan', 9.5811] };
+    const fxPer = s.fx === 'JPY' ? 100 : 1;
+    const fxOpts = Object.keys(FX).map((code) => ({ code, cls: code === s.fx ? 'on' : '', pick: () => this.setState({ fx: code }) }));
+    const kbSrc = s.digits ? ['1234567890', '-/:;()$&@#', '.,?!_+=*%'] : ['qwertyuiop', 'asdfghjkl', 'zxcvbnm'];
+    const isSig = s.kbTarget === 'sig';
+    const kbMax = isSig ? 24 : 32;
+    const kbRows = kbSrc.map((r) => ({ keys: r.split('').map((c0) => {
+      const ch = s.shift && !s.digits ? c0.toUpperCase() : c0;
+      return { ch, press: () => this.setState({ pw: (this.state.pw + ch).slice(0, kbMax) }) };
+    }) }));
+    const POWER = { reboot: ['Reboot the router?', 'Wi-Fi and internet drop for about a minute.', 'Reboot'], shutdown: ['Shut down the router?', 'Everything goes offline until you press the power button.', 'Shut down'] };
+    const pw = POWER[s.sheet2] || ['', '', ''];
+    const C = s.c;
+    const setC = (key, v) => this.setState({ c: { ...this.state.c, [key]: v } });
+    const tg = (key, label) => ({ isToggle: true, label, cls: C[key] ? 'on' : '', act: () => setC(key, !this.state.c[key]) });
+    const seg = (key, label, opts) => ({ isSeg: true, label, opts: opts.map((o) => ({ label: o, cls: C[key] === o ? 'on' : '', pick: () => setC(key, o) })) });
+    const val = (label, value) => ({ isValue: true, label, value });
+    const link = (label, value, act) => ({ isLink: true, label, value, act });
+    const note = (label) => ({ isNote: true, label });
+    const head = (label) => ({ isHead: true, label });
+    const btn = (label, act, cls) => ({ isBtn: true, label, act, cls: cls || '' });
+    const open = (key) => () => this.setState({ screen: 'set', setKey: key, setFrom: this.state.screen === 'set' ? this.state.setFrom : this.state.screen });
+    const DEV = [
+      ['iPhone 15', 'Wi-Fi 5 GHz', '192.168.8.101', '2.4 GB', '3.1 Mbps'], ['MacBook Pro', 'Wi-Fi 5 GHz', '192.168.8.102', '1.6 GB', '12.4 Mbps'],
+      ['iPad Air', 'Wi-Fi 5 GHz', '192.168.8.103', '640 MB', '0.2 Mbps'], ['Galaxy S24', 'Wi-Fi 2.4 GHz', '192.168.8.104', '410 MB', '1.0 Mbps'],
+      ['Apple TV', 'Wi-Fi 5 GHz', '192.168.8.105', '3.8 GB', '6.9 Mbps'], ['Kindle', 'Wi-Fi 2.4 GHz', '192.168.8.106', '12 MB', '0 Mbps'],
+      ['Nintendo Switch', 'Wi-Fi 5 GHz', '192.168.8.107', '220 MB', '0.4 Mbps'], ['Unknown device', 'Wi-Fi 2.4 GHz', '192.168.8.108', '35 MB', '0.1 Mbps']
+    ];
+    const nBlocked = Object.keys(s.blocked).filter((k) => s.blocked[k]).length;
+    const online = DEV.length - nBlocked;
+    const SET = {
+      clients: ['Clients', [head(online + ' online' + (nBlocked ? ' · ' + nBlocked + ' blocked' : '')),
+        ...DEV.map((d, i) => link(d[0], s.blocked[i] ? 'Blocked' : d[3], open('client' + i)))]],
+      internet: ['Internet', [note('The router uses the first working connection in this order, and falls back to the next if it drops.'),
+        val('1 · Cellular (' + a.name + ')', s.air ? 'Off' : 'In use'), val('2 · Repeater (' + s.rep + ')', 'Standby'),
+        val('3 · Ethernet', 'No cable'), val('4 · Tethering', 'No phone'), tg('accel', 'Network acceleration'),
+        note('Acceleration lowers CPU load, but per-device speed and data stats stop working.')]],
+      network: ['Network', [seg('ethMode', 'Ethernet port', ['WAN', 'LAN']), val('Router IP address', '192.168.8.1'),
+        tg('guest', 'Guest Wi-Fi'), val('Guest network gateway', '192.168.9.1'), tg('iot', 'IoT network'), val('IoT network gateway', '192.168.10.1'),
+        note('IPv6 and static IP settings are in the admin panel at 192.168.8.1.')]],
+      display: ['Display', [seg('bright', 'Brightness', ['Low', 'Medium', 'High']),
+        { isToggle: true, label: '24-hour time', cls: s.h24 ? 'on' : '', act: () => this.setState({ h24: !this.state.h24 }) },
+        val('Time zone', 'Manila (UTC+8)'), seg('wake', 'When the screen wakes, show', ['Clock', 'Status']),
+        link('Personal signature', s.sig || 'None', () => this.setState({ screen: 'kb', kbTarget: 'sig', pw: this.state.sig, digits: false, shift: false })),
+        note('Your signature shows on the home screen under the date.')]],
+      security: ['Security', [tg('passOn', 'Screen passcode'), link('Change passcode', s.pin ? 'Set' : 'Not set', () => this.setState({ screen: 'pin', pinBuf: '' })),
+        seg('autoLock', 'Auto lock after', ['30 s', '1 min', '5 min', 'Never']), tg('alwaysOn', 'Screen always on'),
+        note('With a passcode on, the screen asks for it after it auto-locks.'),
+        btn('Lock screen now', () => this.setState({ locked: true, lockStage: 'face' }), 'pri')]],
+      power: ['Power & USB', [tg('chargerOn', 'Power on with charger'), tg('standby', 'Auto standby when idle'),
+        seg('wifiIdle', 'Wi-Fi idle timeout', ['10 min', '30 min', 'Never']), seg('ethIdle', 'Ethernet idle timeout', ['10 min', '30 min', 'Never']),
+        head('USB'), seg('usbMode', 'USB mode', ['Ask me', 'Device', 'Host']), seg('usbProto', 'USB protocol', ['USB 2.0', 'USB 3.0', 'USB 3.1']),
+        seg('dataDir', 'Data port power', ['Input', 'Output']), seg('powerDir', 'Power port power', ['Input', 'Output']),
+        seg('thresh', 'Stop USB power output below', ['10%', '20%', '30%'])]],
+      agh: ['AdGuard Home', [tg('agh', 'AdGuard Home'), val('Status', C.agh ? 'Filtering' : 'Off'),
+        note('Blocks ads and trackers for every device on this router.')]],
+      account: ['GL.iNet Account', [val('Account', 'Not linked'), note('Link the router in the GL.iNet app to manage it remotely.')]],
+      about: ['About device', [val('Model', 'GL-E5800'), val('Firmware', '4.10.3'), val('Modem', 'Quectel RG650V'),
+        val('CPU temperature', '39°C'), seg('fan', 'Fan', ['Auto', 'Quiet', 'Max']), val('Uptime', '0 h 36 m'), val('Admin panel', '192.168.8.1')]]
+    };
+    DEV.forEach((d, i) => {
+      const b = !!s.blocked[i];
+      SET['client' + i] = [d[0], [val('Connection', d[1]), val('IP address', d[2]), val('Data used', d[3]), val('Speed now', b ? '—' : d[4]),
+        btn(b ? 'Unblock this device' : 'Block this device', () => this.setState({ blocked: { ...this.state.blocked, [i]: !b } }), b ? 'pri' : 'danger'),
+        note('Blocking cuts this device off the main and guest Wi-Fi.')]];
+    });
+    const curSet = SET[s.setKey] || SET.clients;
+    const moreRows = [
+      ['Clients', online + ' online', open('clients')], ['Internet', s.air ? 'Airplane' : 'Cellular', open('internet')],
+      ['Network', 'Ethernet, guest', open('network')], ['Display', C.bright, open('display')],
+      ['Security', C.passOn ? 'Passcode on' : 'No passcode', open('security')], ['Power & USB', C.standby ? 'Standby on' : '', open('power')],
+      ['AdGuard Home', C.agh ? 'On' : 'Off', open('agh')], ['GL.iNet Account', 'Not linked', open('account')],
+      ['Dashboard', 'Clocks, stock screen', () => this.setState({ screen: 'settings' })], ['About device', 'GL-E5800', open('about')]
+    ].map(([label, value, act]) => ({ label, value, act }));
+    const pinKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '', '0', '⌫'].map((ch) => ({
+      ch, op: ch === '' ? '0' : '1', aria: ch === '⌫' ? 'Delete' : (ch || 'blank'),
+      press: () => {
+        if (ch === '') return;
+        if (ch === '⌫') { this.setState({ pinBuf: this.state.pinBuf.slice(0, -1) }); return; }
+        const nb = this.state.pinBuf + ch;
+        if (nb.length >= 4) this.setState({ pin: nb, pinBuf: '', screen: 'set', setKey: 'security', c: { ...this.state.c, passOn: true } });
+        else this.setState({ pinBuf: nb });
+      }
+    }));
+    const pinDots = [0, 1, 2, 3].map((i) => ({ fill: i < s.pinBuf.length ? '#4FD1B5' : 'transparent' }));
+    const countries = ['Singapore', 'Japan', 'Hong Kong', 'United States', 'United Kingdom', 'Australia']
+      .map((name) => ({ name, mark: name === s.country ? '✓' : '', pick: () => this.setState({ country: name, screen: 'vpn' }) }));
+    const t1 = this.fmt('Asia/Manila'); const t2 = this.fmt('Asia/Tokyo');
+    const dateStr = new Intl.DateTimeFormat('en-US', { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'Asia/Manila' }).format(new Date(s.now));
+    const pend = s.pend ? SIMS[s.pend] : null;
+    const scr = s.screen;
+    return {
+      asleep: s.asleep, awake: !s.asleep,
+      wake: () => this.setState({ asleep: false, locked: true, lockStage: 'face' }),
+      isLocked: s.locked, lockFace: s.lockStage === 'face', lockPad: s.lockStage === 'pad',
+      lockClock: C.wake === 'Clock', lockStatus: C.wake === 'Status',
+      lockHint: C.passOn && s.pin ? 'Swipe up to enter passcode' : 'Swipe up to unlock',
+      lockDown: (e) => { this.ly = e.clientY; },
+      lockUp: (e) => { if (this.state.lockStage === 'face' && this.ly != null && this.ly - e.clientY > 25) this.unlockStart(); this.ly = null; },
+      lockTap: () => this.unlockStart(),
+      uDots: [0, 1, 2, 3].map((i) => ({ fill: i < s.ubuf.length ? '#4FD1B5' : 'transparent' })),
+      uMsg: s.lockUntil > Date.now() ? 'Too many tries · try again in ' + Math.ceil((s.lockUntil - Date.now()) / 1000) + ' s' : s.uerr,
+      uErrColor: s.lockUntil > Date.now() || s.uerr ? '#FF9A9A' : '#9AA4B0',
+      ulKeys: ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'Back', '0', '⌫'].map((ch) => ({
+        ch, fs: ch === 'Back' ? '10px' : '15px', op: s.lockUntil > Date.now() && ch !== 'Back' ? '0.35' : '1',
+        aria: ch === '⌫' ? 'Delete' : ch, press: () => this.unlockKey(ch) })), sleep: () => this.setState({ asleep: true, screen: 'home' }),
+      tech: s.air ? 'Airplane' : (s.data ? '5G' : 'No data'), carrier: s.air ? '' : a.name, vpnOn: s.vpn,
+      isHome: scr === 'home', isSim: scr === 'sim', isWifi: scr === 'wifi', isJoin: scr === 'join', isQr: scr === 'qr',
+      isVpn: scr === 'vpn', isCountry: scr === 'country', isMore: scr === 'more', isSms: scr === 'sms', isSmsDetail: scr === 'smsDetail',
+      isWeather: scr === 'weather', isMonitor: scr === 'monitor', isFx: scr === 'fx', isSettings: scr === 'settings',
+      showTabs: ['home', 'sim', 'wifi', 'vpn', 'more'].includes(scr),
+      timeMain: t1.main, timeAmPm: t1.ap, time2: t2.main + (t2.ap ? ' ' + t2.ap : ''), twoClocks: s.two, dateStr,
+      activeName: a.name, activeSlot: a.slot, activeUsed: a.used, activeCap: a.cap, activePct: a.pct,
+      vpnLabel: s.vpn ? 'VPN · ' + s.country : 'VPN off', hasUnread: unread > 0, unread: unread + ' new',
+      unreadText: unread > 0 ? unread + ' unread' : 'All read',
+      goHome: go('home'), goSim: go('sim'), goWifi: go('wifi'), goVpn: go('vpn'), goMore: go('more'), goSms: go('sms'),
+      goWeather: go('weather'), goMonitor: go('monitor'), goFx: go('fx'), goSettings: go('settings'), goJoin: go('join'), goQr: go('qr'), goCountry: go('country'),
+      goBackSub: () => { if (s.st === 'down' || s.st === 'up') this.stopTest(); this.setState({ screen: s.from || 'home' }); },
+      goBackFromSms: () => this.setState({ screen: s.from || 'home' }),
+      goWeatherBack: () => this.setState({ screen: 'weather' }),
+      isSet: scr === 'set', setTitle: curSet[0], setItems: curSet[1],
+      setBack: () => this.setState(String(s.setKey).startsWith('client') && s.setKey !== 'clients' ? { setKey: 'clients' } : { screen: s.setFrom || 'more' }),
+      goClients: () => this.setState({ screen: 'set', setKey: 'clients', setFrom: s.screen }),
+      moreRows, online, fx: s.fx,
+      tabHomeCls: curTab === 'home' ? 'on' : '', tabSimCls: curTab === 'sim' ? 'on' : '', tabWifiCls: curTab === 'wifi' ? 'on' : '',
+      tabVpnCls: curTab === 'vpn' ? 'on' : '', tabMoreCls: curTab === 'more' ? 'on' : '', moreDot: unread > 0,
+      tabHome: () => this.setState({ screen: 'home' }), tabSim: () => this.setState({ screen: 'sim' }), tabWifi: () => this.setState({ screen: 'wifi' }),
+      tabVpn: () => this.setState({ screen: 'vpn' }), tabMore: () => this.setState({ screen: 'more' }),
+      airCls: s.air ? 'on' : '', toggleAir: () => this.setState({ air: !s.air }),
+      isPin: scr === 'pin', pinKeys, pinDots, pinBack: () => this.setState({ screen: 'set', setKey: 'security', pinBuf: '' }),
+      goCityPick: () => this.setState({ screen: 'cityPick', q: '' }),
+      qShown: s.q || 'Type a city or country', qCls: s.q ? '' : 'dim', cityResults, cityKb,
+      cityListLabel: qn ? (matches.length ? 'Results' : '') : 'Recent', noResults: !!qn && matches.length === 0,
+      qSpace: () => this.setState({ q: (s.q + ' ').slice(0, 24) }), qDel: () => this.setState({ q: s.q.slice(0, -1) }), goClockPick: () => this.setState({ screen: 'clockPick' }),
+      isCityPick: scr === 'cityPick', isClockPick: scr === 'clockPick', isSimDetail: scr === 'simDetail', isKb: scr === 'kb',
+      city: s.city, wxNow: w[0] + '°', wxFeels: (w[0] + 4) + '°', wxDays, clock2: s.clock2, clockOpts,
+      activeCapText: a.capText, capOpts,
+      fxName: FX[s.fx][0], fxRate: (FX[s.fx][1]).toFixed(2), fxInv: (fxPer / FX[s.fx][1]).toFixed(s.fx === 'JPY' ? 2 : 4) + ' ' + s.fx, fxOpts,
+      stIdle: s.st === 'idle', stRunning: s.st === 'down' || s.st === 'up', stDone: s.st === 'done',
+      stPhase: s.st === 'up' ? 'Upload' : 'Download', stVal: s.stVal.toFixed(1), stProg: Math.round(s.stProg * 100) + '%',
+      stDown: s.stDown.toFixed(1), stUp: s.stUp.toFixed(1), stUsed: Math.max(1, Math.round((s.stDown + s.stUp) * 3.84 / 8 * 4)) + ' MB',
+      startTest: () => this.startTest(), stopTest: () => this.stopTest(),
+      kbFor: s.kbFor, kbRows, pwShown: s.pw,
+      pwHint: isSig ? s.pw.length + ' / 24 characters · leave empty for none' : (s.pw.length < 8 ? 'At least 8 characters' : ''),
+      kbTitle: isSig ? 'Personal signature' : 'Password for ' + s.kbFor, kbAction: isSig ? 'Save' : 'Connect',
+      kbBack: () => this.setState(isSig ? { screen: 'set', setKey: 'display' } : { screen: 'join' }),
+      kbShift: () => this.setState({ shift: !s.shift }), shiftBg: s.shift ? '#2FA88F' : '#262D38',
+      kbMode: () => this.setState({ digits: !s.digits }), kbModeLabel: s.digits ? 'abc' : '123',
+      kbSpace: () => this.setState({ pw: (s.pw + ' ').slice(0, kbMax) }), kbDel: () => this.setState({ pw: s.pw.slice(0, -1) }),
+      kbConnectOpacity: isSig || s.pw.length >= 8 ? '1' : '0.4',
+      kbConnect: () => {
+        if (isSig) this.setState({ sig: s.pw.trim(), screen: 'set', setKey: 'display' });
+        else if (s.pw.length >= 8) this.join(s.kbFor);
+      },
+      hasSig: !!s.sig, sig: s.sig,
+      isJoining: !!s.joining, joiningName: s.joining || '',
+      askReboot: () => this.setState({ sheet2: 'reboot' }), askShutdown: () => this.setState({ sheet2: 'shutdown' }),
+      showPowerSheet: !!s.sheet2, powerTitle: pw[0], powerNote: pw[1], powerYes: pw[2],
+      cancelPower: () => this.setState({ sheet2: null }),
+      confirmPower: () => {
+        if (s.sheet2 === 'reboot') { this.setState({ sheet2: null, power: 'rebooting' }); setTimeout(() => this.setState({ power: null, screen: 'home' }), 3000); }
+        else this.setState({ sheet2: null, power: 'off' });
+      },
+      isRebooting: s.power === 'rebooting', isOff: s.power === 'off', powerOn: () => this.setState({ power: null, screen: 'home' }),
+      goStock: () => this.setState({ stock: false, stockMode: true }), isStockMode: s.stockMode, exitStock: () => this.setState({ stockMode: false, screen: 'home' }),
+      sims, dataCls: s.data ? 'on' : '', roamCls: s.roam ? 'on' : '',
+      toggleData: () => this.setState({ data: !s.data }), toggleRoam: () => this.setState({ roam: !s.roam }),
+      repSsid: s.rep, w24Cls: s.w24 ? 'on' : '', w5Cls: s.w5 ? 'on' : '',
+      toggle24: () => this.setState({ w24: !s.w24 }), toggle5: () => this.setState({ w5: !s.w5 }), nets,
+      vpnCls: s.vpn ? 'on' : '', vpnBusy: s.vpnBusy, vpnIdle: !s.vpnBusy,
+      vpnBtnText: s.vpnBusy ? (s.vpn ? 'Stopping' : 'Connecting') : (s.vpn ? 'On' : 'Off'),
+      vpnAria: s.vpn ? 'Turn VPN off' : 'Turn VPN on',
+      vpnCaption: s.vpn ? 'All devices go through ' + s.country + '.' : 'Tap to connect. Devices use your normal connection.',
+      toggleVpn: () => { if (s.vpnBusy) return; this.setState({ vpnBusy: true }); setTimeout(() => this.setState({ vpnBusy: false, vpn: !this.state.vpn }), 1400); },
+      vpnCountry: s.country, countries,
+      msgs, cur: MSGS[s.cur],
+      one: s.two ? '' : 'on', two: s.two ? 'on' : '', setOne: () => this.setState({ two: false }), setTwo: () => this.setState({ two: true }),
+      h24Cls: s.h24 ? 'on' : '', toggle24h: () => this.setState({ h24: !s.h24 }),
+      showStock: s.stock, askStock: () => this.setState({ stock: true }), cancelStock: () => this.setState({ stock: false }),
+      showSheet: !!s.pend && !s.switching, switching: s.switching, pendName: pend ? pend.name : '', pendNote: pend ? pend.note : '',
+      cancelSheet: () => this.setState({ pend: null }),
+      confirmSheet: () => { const k = s.pend; this.setState({ switching: true }); setTimeout(() => this.setState({ sim: k, pend: null, switching: false }), 1800); }
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+#!/bin/sh
+# Not for offline (image-building) installs.
+[ -z "${IPKG_INSTROOT}" ] || exit 0
+
+# Never call opkg from here: opkg holds a non-reentrant lock for the whole install, so even a read-only
+# opkg command deadlocks and leaves the package half-configured. python3-pillow also can't be a normal
+# dependency (it clashes with a file the stock screen package owns), so it is only checked for.
+mkdir -p /root/e5ui/cache
+chmod 755 /root/e5ui/*.sh /root/e5ui/*.py /etc/init.d/e5ui /etc/init.d/homebutton
+if ! python3 -c "import PIL" 2>/dev/null; then
+    echo "NOTE: python3-pillow is not installed, and the screen UI needs it."
+    echo "      Run: opkg install --nodeps python3-pillow"
+fi
+
+# the power-button watcher works whichever screen UI is showing
+/etc/init.d/homebutton enable
+/etc/init.d/homebutton restart
+
+# Replacing an installed copy removes the old one first (prerm), which hands the screen back to the stock UI.
+# If the custom screen was active a moment ago, put it back. Only within 5 minutes, so a fresh install later
+# never swaps the screen by surprise.
+if [ -f /tmp/e5ui_reactivate ]; then
+    then_=$(cat /tmp/e5ui_reactivate 2>/dev/null)
+    rm -f /tmp/e5ui_reactivate
+    now=$(date +%s)
+    if [ -n "$then_" ] && [ "$((now - then_))" -lt 300 ]; then
+        /root/e5ui/toggle.sh on
+        echo "Custom screen restored."
+    fi
+elif /etc/init.d/e5ui running 2>/dev/null; then
+    /etc/init.d/e5ui restart   # already showing: load the new code
+fi
+
+echo "Installed. To use it on the touchscreen: /root/e5ui/toggle.sh on  (or hold the power button ~1 s)."
+echo "Back to the stock screen any time: /root/e5ui/toggle.sh off"
+exit 0

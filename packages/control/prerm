@@ -1,0 +1,14 @@
+#!/bin/sh
+[ -z "${IPKG_INSTROOT}" ] || exit 0
+
+# If the custom screen is the one in use (or set to start), hand the screen back to the stock UI first, so
+# removing the files can never leave the display blank or crash-looping.
+if /etc/init.d/e5ui running 2>/dev/null || /etc/init.d/e5ui enabled 2>/dev/null; then
+    if /etc/init.d/e5ui running 2>/dev/null; then
+        date +%s > /tmp/e5ui_reactivate   # lets an upgrade put it back (see postinst)
+    fi
+    /root/e5ui/toggle.sh off
+fi
+/etc/init.d/homebutton stop 2>/dev/null
+/etc/init.d/homebutton disable 2>/dev/null
+exit 0

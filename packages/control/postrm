@@ -1,0 +1,8 @@
+#!/bin/sh
+[ -z "${IPKG_INSTROOT}" ] || exit 0
+
+# Only generated clutter is removed. Your settings (config.json) and the monthly data-usage counters (cache/)
+# are kept, so reinstalling or upgrading doesn't lose them. To wipe everything: rm -rf /root/e5ui
+rm -rf /root/e5ui/__pycache__
+rm -f /root/e5ui/.backlight_saved
+exit 0

@@ -1,0 +1,13 @@
+Package: gl-e5800-touch-ui
+Version: @VERSION@
+Depends: python3, libtiff6, qrencode, zoneinfo-asia, zoneinfo-europe, zoneinfo-america, zoneinfo-australia-nz, zoneinfo-pacific
+Conflicts: gl-e5800-dashboard
+Section: utils
+Architecture: all
+Installed-Size: @SIZE@
+Description: Custom touchscreen UI for the GL.iNet GL-E5800 (240x320 screen)
+ Replaces the stock gl_screen UI on the built-in touchscreen with a UI that
+ follows the stock firmware's features (SIM, Wi-Fi, VPN, texts, clients, ...).
+ Installing does not switch the screen over: run /root/e5ui/toggle.sh on, or
+ hold the power button for a second. Back to stock: /root/e5ui/toggle.sh off.
+ Needs python3-pillow too: opkg install --nodeps python3-pillow

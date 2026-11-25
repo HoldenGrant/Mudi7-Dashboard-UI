@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Local previews and screen captures
+preview/
+*.raw
+screen.png
+
+# Router-side state (never belongs in the repo)
+config.json
+cache/
+.backlight_saved
+wallpaper.jpg
+wallpaper.jpeg
+wallpaper.png
+
+packages/dist/
