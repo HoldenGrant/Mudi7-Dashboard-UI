@@ -3,13 +3,16 @@
 State as of **2026-11-25, evening (Manila)**. Read this first, then [docs/DEVELOPER.md](docs/DEVELOPER.md)
 for how the app works and [docs/USER_GUIDE.md](docs/USER_GUIDE.md) for what each screen does.
 
+> **2026-11-27 (latest):** released as **v1.0.3** (package 1.0.3, identical to `router/`, installed on the router). Everything below dated 2026-11-25 to 2026-11-27 is in that release;
+> older "not committed" remarks in the dated sections are history. See the newest dated sections at the end for the critique work (Home uplink, VPN status, legibility, QR pages, More regroup, polish) and scroll fixes.
+>
 > **2026-11-25 (final state, evening):** after the audit: text **sending was removed** (it wasn't working; reading, delete and the Sent list stay), a **main + compare currency**
 > picker was added, **Network & bands** (stock web UI's network type + band masking; write tested live), and an **accent color** option (5 presets + custom). The router runs
-> package **gl-e5800-touch-ui 1.0.2** (identical to `router/`). Nothing is committed. Sections below that describe sending a text (step 4j / "Send a text") are history.
+> package **gl-e5800-touch-ui 1.0.2** (identical to `router/` that evening). Sections below that describe sending a text (step 4j / "Send a text") are history.
 >
 > **2026-11-25 (end of session): stock comparison finished.** See `docs/STOCK_COMPARISON.md` and the dated sections below (VPN rebuild, stock-path migration, shared settings, power, saved networks, text
 > delete/send/sent list, SIM failover/PIN/details/eSIM, firmware notice, Wi-Fi password/channel/hidden/TX power/band, repeater password). Rule from Holden: before building anything, check how the stock firmware does it
-> and copy that. Skipped on purpose: firmware install. **Nothing is committed**; many real writes were never tried on the device (listed per section: Wi-Fi changes, sending a text, SIM PIN, band change, reboot via GL).
+> and copy that. Skipped on purpose: firmware install. (Committed and published later: see 2026-11-27.) Many real writes were never tried on the device (listed per section: Wi-Fi changes, sending a text, SIM PIN, band change, reboot via GL).
 
 > **2026-11-25 ~04:05: firmware updated to 4.10.4; custom UI reinstalled.** The update wiped `/root/e5ui`, the init
 > scripts and python3/Pillow. Reinstalled per docs/DEVELOPER.md "Fresh install" (opkg: python3, libtiff6, qrencode,
@@ -496,6 +499,73 @@ cache stores glyph masks only, so it needs no flush); `ON_ACCENT` (text on fille
 (`accent_fix`). WARN orange and the danger red are not themed. New row kind `swatch`. Checked with preview renders (Teal, Blue, Pink, a custom orange) and deployed;
 not tapped on the physical screen. Not committed. Package 1.0.2 (with this feature) was built and installed on the router the same evening (upgrade from 1.0.1: dry run clean, exit 0, custom screen restored by postinst, files identical to `router/`, `config.json` unchanged, services running).
 
+## Signature moved on Home (2026-11-27)
+
+Holden sent a photo of the Home screen: with two clocks on, the signature (third line under the big time, y=88) was clipped by the SIM card (top at y=100). Moved it to the
+empty strip above the tab bar (centered at y=260, teal, up to the screen width minus 30 px; `v_home`), which also gives the date and second clock more room. The lock screen
+and the Status wake view are unchanged. Checked with a preview render (two clocks + a 23-character signature) and deployed to the router; not tapped on the screen. The router
+now runs a newer `app.py` than package 1.0.2 and than the published release / commit (not committed, not repackaged: Holden hasn't asked).
+
+## Tailscale switch (2026-11-27)
+
+Holden: "can we add tailscale off/on" (then "check the firmware?": do what stock does). Stock: the VPN dashboard / `gl-sdk4-ui-tailscaleview`, module `tailscale` through
+`gl_call`: `get_config {}` -> `{enabled, wan_enabled, lan_enabled, exit_node_ip, run_exit_node, masq, lan_ip}`; `get_status {}` (only meaningful while enabled) -> `{status: 1 not bound / needs
+login, 2 needs mandate, 3 connected, 4 connecting, login_name, address_v4, dns}`; `set_config`: off = `{enabled: false}`, on = `{enabled: true, exit_node_ip, run_exit_node, wan_enabled,
+lan_enabled, masq}` with the saved values (the stock UI waits 5 s then re-reads); also `get_auth_url`, `logout`, `get_exit_node_list` (not used here). The stock touchscreen has no
+Tailscale page. Built: a third card on the VPN tab (`v_vpn`, `tailscale_switch`, `lib.get_tailscale` / `set_tailscale_enabled`, job `ts`); the big circle was made slightly smaller
+and the cards tightened to fit above the tab bar (content is drawn 8 px lower than the y values in `v_*`, so ~268 is the usable bottom). The account name is not kept or shown. When connected, the state is a chip beside the name and the address has the whole second line (a full address like 100.101.202.233 was cut by the switch on one line).
+Router state when built: Tailscale installed (1.92.5) but disabled, `tailscaled` not running, never signed in (get_status returned only dns). **Verified:** the reads on the live router,
+preview renders (off / connected / not signed in with example data), deployed. **Never run on the router: the switch itself (`set_config`).** Switching it on with no account only
+makes the service start and ask for sign-in; ask Holden before testing. Signing in (`get_auth_url`) is left to the admin panel. Not committed; the router runs a newer `app.py` /
+`lib.py` than package 1.0.2 and the GitHub release.
+
+## Home as a status board, step 1 of the critique plan (2026-11-27)
+
+`/impeccable critique` of the whole UI scored 27/40 (snapshot in `.impeccable/critique/`, untracked). Its top issue: Home led with the SIM data allowance ("data off") and never said what the
+router was connected through. Holden chose: Home = a glanceable status board, uplink first, fix everything in the plan (steps: 1 Home uplink card, 2 one VPN status covering WireGuard
+and Tailscale, 3 legibility on the glass, 4 dead ends/QR/waits, 5 More + bands restructure, 6 polish). **Step 1 done and deployed:** `v_home`'s first card is now the uplink: title =
+Wi-Fi name (repeater) / carrier name (mobile) / Ethernet / Offline (amber); chip = `Wi-Fi · Strong|Fair|Weak` (dBm > -60 / > -72, the same cut-offs as the Wi-Fi tab), `4G · Strong|Fair|Weak`
+(modem bars 3-4 / 2 / 0-1) or `Wired`; second line = the SIM (`data off`, or `used of cap`); the usage bar shows only with data on and a cap. The "Repeater" chip is gone. The card opens
+the Wi-Fi tab / SIM tab / Internet settings by uplink. The four tiles share one label-over-value structure and a 9 px inset (this also fixed the Texts label that sat at x=141): Devices,
+Speed ("SPEED  Mbps"), VPN (Off in grey, or the country in the accent color), Texts (`All read` / `N new` amber). The tile rows are 160-204 and 208-244. Preview states added to the
+`--preview` run (`home_up_*`; they patch `lib.get_wan_conn_type` / `get_cell_signal` and `app.data_on`, then restore them). **Not yet judged on the glass** (that is step 3); the Home VPN
+tile still reads only the WireGuard tunnel (step 2 fixes that). Not committed; the router runs a newer `app.py` than package 1.0.2 and the GitHub release.
+
+## One truthful VPN status, step 2 of the critique plan (2026-11-27)
+
+Critique issue: the Home tile, lock row, status-bar shield and quick-panel tile read only the WireGuard tunnel (`wga`), so with Tailscale up they said "VPN off" while the VPN tab's Tailscale
+card said "Connected". Fix (deployed): new `App.ts_connected()` (Tailscale status 3 from the `ts` job) and `App.vpn_text(wga)`. Status-bar shield = WireGuard or Tailscale connected. Home VPN tile
+= WireGuard state (Off / country, accent when on) plus a teal "Tailscale" chip beside the label when it is connected. Lock row = `Off` / the server / `Tailscale on` / `Philippines + Tailscale`; the
+lock rows' value width now comes from each row's own label (the VPN row had been clipping "...+ Tailsc…"). VPN tab caption names the service: "WireGuard is on. All devices go through X." / "WireGuard is off.
+Devices use your normal connection." / "Choose a WireGuard location to set up the tunnel." Quick-panel tile stays "VPN" (it toggles the WireGuard tunnel, as before) with the state line "WireGuard" when on
+(the label "WireGuard" did not fit the tile). Tailscale that is on but not yet connected (sign in / approve / connecting) is shown only on the VPN tab card, not on Home or lock: the shield and chips mean
+connected. The preview run renders all four combinations on the lock, Home, VPN and panel (`vpnst_*`, example states). Not committed; not packaged.
+
+## Legibility on the glass, step 3 of the critique plan (2026-11-27)
+
+From the critique and Holden's photo of the real screen: the date, city and weather sat on the bright planet edge, and the smallest text was 11-12 px (`F(8)` / `F(9)` after `FONT_BUMP`). Changes (deployed): **`MIN_PX = 13`** in `F()`: nothing is drawn smaller
+(53 text draws were affected); **chips 15 -> 17 px tall** (`chip()`); **note rows** use a 16 px line height (`row_h` + `draw_row`); **wallpaper scrim**: `wallpaper(choice, dim, scrim)` adds an eased black gradient over the top 130 px (0.75 on
+Home and on the lock screen; cache key includes it). Knock-on fixes found by rendering all 109 preview screens before/after (side-by-side sheets): quick-panel tiles widened to 72 px (gap 4, margins 8) so "Shut down" and the Wi-Fi name fit;
+currency card taller (spacing under the big number); Wi-Fi tab header card 58-116 with the Main/Guest switch and rows moved down 8 px; Ethernet segment "WAN · internet in" shortened to "WAN · internet"; the Home VPN tile no longer has a Tailscale chip
+(it could not fit beside the label at 13 px): its value is `Off` / the country / `Tailscale` / `2 connected`. **Verified in previews only; not yet judged on the real glass** (the scrim strength and the 13 px floor should be checked on a new photo). Not
+committed; not packaged.
+
+## Dead ends and waits, step 4 of the critique plan (2026-11-27)
+
+Critique issue: "use the admin panel" notices were dead ends on a 240x320 screen, and the Switching screen was a silent spinner. Done (deployed): **admin-panel QR** (`v_admin_qr`: `http://<lan ip>`, reached from About device > Admin panel, the firmware page
+"Open admin panel" row when an update exists, and the Tailscale error page); **Tailscale sign-in** (`lib.get_tailscale_auth_url` = the stock `tailscale.get_auth_url {}` -> `{auth_url}`; `v_ts_login` shows it as a QR; when status is 1 the Tailscale card text is "Tap to sign in (QR code)" and
+the left part of the card opens the page while the switch stays a switch; the link is never logged); **busy overlay** (`v_busy`): job name, `N s so far`, an estimate only where measured/stated (`BUSY_HINTS`: SIM switch "Up to a minute", Applying "Usually 10-45 s" from the band tests,
+Tailscale "About 5 s"), and **Hide** (`busy_hidden`, small pill above the tab bar; `work()` now runs one job at a time and says "Still working" otherwise; `power()` jobs can't be hidden); `draw_qr` factored out of Share Wi-Fi and now keeps a 4-module quiet zone when modules stay >= 3 px
+(was ~2.4 modules; the long Wi-Fi codes keep the old tight fit). **Verified:** preview renders of every new state, and the drawn admin and sign-in QR modules read back from the PNG match the encoder output exactly (0 wrong modules; quiet zone 5.8 / 8 modules). **Not verified:** a phone scanning the
+real glass (modules are 4 px / 3 px), and `get_auth_url` on the live router (Tailscale is off and not signed in: turning it on, then tapping the card, would test it; ask Holden first). Not committed; not packaged.
+
+## More regrouped and the band chips moved down, step 5 of the critique plan (2026-11-27)
+
+Critique issue: More was one run of 15 rows (+4 tiles), the SIM tab opened a page called "Mobile", and the bands page showed 13+15+15 chips at once. Done (deployed): **More** now has four labeled groups, none over four rows: Tools (the Texts/Weather/Monitor/Currency tiles),
+Connections (Clients, Internet, Network, AdGuard Home), Device (Display, Security, Power & USB, Dashboard), Router (Firmware, GL.iNet Account, About device); Airplane mode on top, Screen off / Reboot / Shut down at the end; the Monitor tile subtitle is now "Speed test" (it was cut off). **SIM page title**
+"Mobile" -> "SIM & data" (matches its tab). **Network & bands**: the main page keeps Network type, Band masking and Apply; with masking on, an "Allowed bands" row ("9 of 43" / "Pick at least one") opens `v_bands_pick` with the chips (same `bands` row kind, same edit copy via `bands_ctx()`; Apply stays on the main page).
+Not built, on purpose: "Auto / 5G only / Custom" presets: the critique conflated network type (Auto / 5G / 4G, already the first control) with band masking (all bands vs a chosen set); the Allowed bands page is the "Custom" part. Checked with preview renders (More at four scroll positions, the three band pages); not tapped on the glass. Not committed; not packaged.
+
 ## Incident: Wi-Fi reload pile-up (fixed; fix needs a live test)
 
 **Symptom:** turning on guest Wi-Fi never took effect, renaming only did one band, the Share guest QR was
@@ -524,6 +594,45 @@ A single reload taking a minute or more is the firmware's normal speed; there is
 
 **Permissions:** killing the stuck reload processes was blocked by the auto-mode safety check as
 destructive. Ask Holden before ending processes on the router, or suggest a reboot (More → Reboot).
+
+## Critique step 6: polish (2026-11-27)
+
+- **One selection mark.** New row kind `pick` (`("pick", label, selected, fn[, detail])`): a ✓ on the chosen item and nothing on the others. Before, picker lists
+  showed a "✓" in the value slot *and* a chevron on every row (so the chosen row read "✓ ›"), the accent list swapped ✓/chevron, and clock times were prefixed with "✓ ".
+  Converted: data cap, VPN location, both currency pickers, second clock, and the generic option lists (Wi-Fi idle timeout etc.). The accent swatch rows show ✓ or nothing; only
+  "Your color" keeps a chevron because it opens an editor. The city list's ✓ (own layout) was already the same glyph.
+- **Accent can't mimic a warning.** `WARN_HUE = (0.04, 0.16)` (about 15-58 degrees): `accent_fix` moves any strong color in that band to its nearer edge (orange becomes red-orange,
+  amber becomes yellow). Checked: #FF8C42 -> #FF6F42, #FFA524 -> #FF5924, #F5C26B -> #F5EF6B; teal, blue, purple, pink, lime and greys are untouched. `set_accent` now stores the
+  adjusted color so the hex shown in the list matches the screen. The red danger color is not reserved.
+- Deployed (UI service restarted, no errors, `config.json` unchanged). Checked with preview renders only, not on the glass.
+
+### SIM page note clipped (2026-11-27)
+
+The line under the three SIM cards ("Mobile data is off. Tap a SIM to use it.") was cut off: since the 13 px text floor it is taller than the 13 px gap it was given, and
+the rows below were drawn over it. Note moved 2 px down, the rows below start 7 px lower, and both versions of the text are shorter ("Data is off. Tap a SIM to use it." /
+"SIM2 and eSIM share one slot.") so they fit on one line. Preview-checked and deployed. Other one-off `self.t(..., F(9), ...)` lines placed by hand were not audited.
+
+### SIM page scrolls as one list (2026-11-27)
+
+Holden: "I can barely scroll Data roaming, SIM failover, eSIM info." The Mobile data switch, the three SIM cards and the note were fixed on screen, and only the last three rows
+scrolled in the ~40 px left over. Now `v_sim` builds one `rows()` list (scroll key `sim_rows`): switch, three cards, note, Data roaming, SIM failover, eSIM information. The card
+drawing moved to `sim_card()` and is used through a new row kind `("simcard", draw(y) -> tap action)` (height 41), so it draws on the scrolling layer. The note is now an ordinary
+`note` row. Preview shots `sim_mid` / `sim_end` added. Deployed; checked in renders only.
+
+### Scroll-area audit of every page (2026-11-27)
+
+After the SIM page, every screen was checked: a temporary print in `rows()` during `--preview` logged each scroll area's visible height and content height (not kept in the code).
+Result: only **Wi-Fi** was starved (116 px visible for 786 px of rows; the "Internet from Wi-Fi" card and the Main/Guest switch were fixed above it). Fixed: only the Main/Guest
+switch stays pinned (rows start at 90, about 186 px visible); the uplink card is now the first row of the Main list (row kind `("upcard", draw(y) -> tap action)`, 62 px,
+`wifi_uplink_card()`), so it scrolls away and the Guest tab no longer shows it. Everything else is fine: share, accent colour, currency, weather fit without scrolling; Sim detail
+has 226 px; More, Display etc. start at 56. Fixed single screens (Home, VPN, Monitor, Weather city, QR pages, keyboards, lock) are drawn by hand and were looked at in renders.
+Deployed; renders only.
+
+### Package 1.0.3 built and installed (2026-11-27)
+
+`packages/dist/gl-e5800-touch-ui_1.0.3_all.ipk` (built with `./build.sh 1.0.3`, git-ignored; app.py/lib.py inside are identical to `router/`). Dry run, then `opkg install`: exit 0, 1.0.2 -> 1.0.3,
+custom screen restored by postinst, `config.json` checksum unchanged, no render errors. The router's opkg version now matches its code. **Not committed, not pushed, and the GitHub release is still v1.0.2**
+(its code and docs are older than the router's).
 
 ## Not tested on the live router (by design: they disrupt service)
 

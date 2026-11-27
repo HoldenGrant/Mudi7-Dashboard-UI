@@ -45,9 +45,16 @@ ON_ACCENT = (4, 20, 15)  # text on a filled accent button: dark on light accents
 ACCENTS = [("Teal", (79, 209, 181)), ("Blue", (96, 165, 250)), ("Purple", (167, 139, 250)), ("Pink", (244, 114, 182)), ("Lime", (163, 230, 53))]
 
 
+WARN_HUE = (0.04, 0.16)  # orange to amber (about 15-58 degrees): reserved for warnings, so an accent can't pass for one
+
+
 def accent_fix(rgb):
-    """Keep a chosen color readable on the dark screen: dark colors are lightened (brightness at least 60%)."""
+    """Keep a chosen color readable on the dark screen: dark colors are lightened (brightness at least 60%),
+    and strong oranges/ambers are nudged to the nearest edge of the warning hues so they never look like a warning."""
     h, s, v = colorsys.rgb_to_hsv(*[x / 255 for x in rgb])
+    lo, hi = WARN_HUE
+    if s > 0.35 and lo < h < hi:
+        h = lo if h - lo < hi - h else hi
     return tuple(round(x * 255) for x in colorsys.hsv_to_rgb(h, s, max(v, 0.6)))
 
 
@@ -77,8 +84,11 @@ _FN = {"m": "default_medium", "s": "default_semibold", "b": "default_bold", "mon
 FONT_BUMP = 3  # body text is drawn this many px larger; big display numbers (>16px) are left alone
 
 
+MIN_PX = 13  # nothing is drawn smaller than this: on the real glass, glare and bloom eat 11-12 px text (checked on a photo of the screen)
+
+
 def F(size, w="m"):
-    return lib.font(_FN[w], size + FONT_BUMP if size <= 16 else size)
+    return lib.font(_FN[w], max(MIN_PX, size + FONT_BUMP if size <= 16 else size))
 
 
 TAP = 10
@@ -948,8 +958,9 @@ def set_brightness(level):
 _wall_cache = {}
 
 
-def wallpaper(choice, dim):
-    """240x320 RGB wallpaper (cover-cropped, darkened by `dim`), or None for Plain/missing."""
+def wallpaper(choice, dim, scrim=0.0):
+    """240x320 RGB wallpaper (cover-cropped, darkened by `dim`), or None for Plain/missing. `scrim` (0-1) adds a black gradient fading out over the
+    top 130 px, where the date, city and weather sit: the bright planet edge there outshone that small text on the real glass."""
     if choice == "Earth":
         path = STOCK_WALL
     elif choice == "Your own":
@@ -958,7 +969,7 @@ def wallpaper(choice, dim):
         return None
     if not path or not os.path.exists(path):
         return None
-    key = (path, os.path.getmtime(path), dim)
+    key = (path, os.path.getmtime(path), dim, scrim)
     if key not in _wall_cache:
         try:
             im = Image.open(path).convert("RGB")
@@ -968,7 +979,14 @@ def wallpaper(choice, dim):
             im = im.crop((left, top, left + W, top + H))
             if len(_wall_cache) >= 2:  # lock and home use different dims; keep both so unlocking doesn't re-resize
                 _wall_cache.clear()
-            _wall_cache[key] = Image.blend(im, Image.new("RGB", (W, H), (0, 0, 0)), dim)
+            im = Image.blend(im, Image.new("RGB", (W, H), (0, 0, 0)), dim)
+            if scrim:
+                fade = Image.new("L", (W, 130), 0)
+                fd = ImageDraw.Draw(fade)
+                for row in range(130):  # eased: strong behind the clock and date, gone by the card
+                    fd.line([(0, row), (W, row)], fill=int(255 * scrim * (1 - (row / 130) ** 2)))
+                im.paste(Image.new("RGB", (W, 130), (0, 0, 0)), (0, 0), fade)
+            _wall_cache[key] = im
         except Exception:
             return None
     return _wall_cache[key]
@@ -1004,6 +1022,7 @@ class App:
         self.view, self.stack = "home", []
         self.hits, self.scroll, self.scroll_area, self.drag_dy = [], {}, None, 0
         self.sheet = self.busy = self.kb = None
+        self.busy_hidden, self.busy_can_hide = False, False  # a long job can be hidden: it keeps running and a small pill shows it
         self.toast, self.toast_t = "", 0
         self.locked, self.lock_stage, self.ubuf, self.uerr, self.tries, self.lock_until = False, "face", "", "", 0, 0
         self.pinbuf = ""
@@ -1036,6 +1055,7 @@ class App:
         r.add("fw", lib.get_firmware_update, 21600)  # the router itself checks too; the stock web UI asks on every page load
         r.add("wga", lambda: lib.get_wireguard_active(strict=True), 20, none_ok=True)  # None = no VPN connected
         r.add("vpnt", lib.get_vpn_tunnel, 20, none_ok=True)  # None = no tunnel yet
+        r.add("ts", lib.get_tailscale, 30)
         r.add("wx", lambda: fetch_wx(self.cfg["city"]), 1800)
         r.add("aq", lambda: fetch_aq(self.cfg["city"]), 1800)
         r.add("fx", lib.fetch_fx, 3600)
@@ -1081,6 +1101,10 @@ class App:
         self.dirty = True
 
     def work(self, label, fn, refresh=(), done=None):
+        if self.busy:  # a hidden job is still running: don't start a second change on top of it
+            self.say("Still working: " + self.busy[0])
+            return
+
         def run():
             try:
                 fn()
@@ -1091,9 +1115,9 @@ class App:
             finally:
                 for k in refresh:
                     self.r.request(k)
-                self.busy = None
+                self.busy, self.busy_hidden = None, False
                 self.dirty = True
-        self.busy = (label, time.time())
+        self.busy, self.busy_hidden, self.busy_can_hide = (label, time.time()), False, True
         threading.Thread(target=run, daemon=True).start()
 
     def confirm(self, title, body, yes, fn, danger=False):
@@ -1212,8 +1236,8 @@ class App:
         f = F(9, "b")
         w = int(self.d.textlength(s, font=f)) + 10
         x0 = xr - w if anchor_right else xr
-        self.d.rounded_rectangle((x0, y, x0 + w, y + 15), radius=7, fill=bg)
-        self.t((x0 + w / 2, y + 8), s, f, fg, "mm")
+        self.d.rounded_rectangle((x0, y, x0 + w, y + 17), radius=8, fill=bg)
+        self.t((x0 + w / 2, y + 9), s, f, fg, "mm")
         return w
 
     def toggle(self, xr, cy, on):
@@ -1282,7 +1306,7 @@ class App:
         on = []
         if self.cfg["pass_on"] and self.cfg["pin"]:
             on.append("lock")
-        if self.g("wga"):
+        if self.g("wga") or self.ts_connected():  # the shield means a VPN service is up: WireGuard or Tailscale
             on.append("vpn")
         agh = self.g("agh") or {}
         if agh.get("enabled") and agh.get("dns"):
@@ -1351,9 +1375,9 @@ class App:
         y0 = 276
         self.d.rectangle((0, y0, W, H), fill=TABBG)
         self.d.line([(0, y0), (W, y0)], fill=(34, 40, 51))
-        cur = self.view if self.view in TABS else ("vpn" if self.view in ("vpn_loc", "vpn_opts") else
+        cur = self.view if self.view in TABS else ("vpn" if self.view in ("vpn_loc", "vpn_opts", "ts_login") else
                                                    "wifi" if self.view in ("join", "share", "saved", "saved_net") else
-                                                   "sim" if self.view in ("sim_detail", "sim_info", "failover", "sim_unlock", "esim", "bands") else "more")
+                                                   "sim" if self.view in ("sim_detail", "sim_info", "failover", "sim_unlock", "esim", "bands", "bands_pick") else "more")
         labels = {"home": "Home", "sim": "SIM", "wifi": "Wi-Fi", "vpn": "VPN", "more": "More"}
         for i, k in enumerate(TABS):
             x0 = i * 48
@@ -1384,12 +1408,12 @@ class App:
     def row_h(self, r):
         k = r[0]
         if k == "note":
-            return 8 + 12 * len(wrap(self.d, r[1], F(9), W - 24))
+            return 8 + 16 * len(wrap(self.d, r[1], F(9), W - 24))
         if k == "para":
             return 8 + 16 * len(wrap(self.d, r[1], F(12), W - 24))
         if k == "bands":  # a title line, then the band chips four to a row
             return 28 + 28 * -(-len(r[2]) // 4) + 4
-        return {"head": 22, "seg": 54, "btn": 46, "btn3": 46, "tiles": 48, "msg": 40, "gap": r[1] if len(r) > 1 else 8}.get(k, 36)
+        return {"head": 22, "seg": 54, "btn": 46, "btn3": 46, "tiles": 48, "msg": 40, "simcard": 41, "upcard": 62, "gap": r[1] if len(r) > 1 else 8}.get(k, 36)
 
     def draw_row(self, d, y, r, hits):
         k, X0, X1 = r[0], 10, W - 10
@@ -1424,13 +1448,27 @@ class App:
                 self.t((X0 + 2, y + 18), self.fit(label, F(12), span - vw - 12), F(12), FG, "lm")
                 self.t((X1 - 2, y + 18), val, vf, FG, "rm")
             d.line([(X0, y + 35), (X1, y + 35)], fill=DIV)
+        elif k == "pick":  # choose-one list: a ✓ on the current choice, nothing on the others (tapping never opens another page)
+            _, label, on, fn = r[:4]
+            note = r[4] if len(r) > 4 else ""
+            self.t((X0 + 2, y + 18), self.fit(label, F(12), X1 - X0 - 28 - (d.textlength(note, font=F(10)) + 8 if note else 0)), F(12), FG, "lm")
+            if note:
+                self.t((X1 - 24, y + 18), note, F(10), DIM, "rm")
+            if on:
+                self.t((X1 - 2, y + 18), "✓", F(12, "b"), TEAL, "rm")
+            d.line([(X0, y + 35), (X1, y + 35)], fill=DIV)
+            hits.append(((0, y, W, y + 36), fn))
+        elif k == "upcard":  # same idea as simcard: r[1](y) draws the Wi-Fi uplink card, returns its tap action
+            hits.append(((10, y, W - 10, y + 58), r[1](y)))
+        elif k == "simcard":  # r[1](y) draws the card on this surface and returns its tap action
+            hits.append(((10, y, W - 10, y + 38), r[1](y)))
         elif k == "swatch":  # a color dot, its name and a check on the one in use
-            _, label, rgb, on, fn = r
+            _, label, rgb, on, fn = r[:5]
             d.ellipse((X0 + 4, y + 8, X0 + 24, y + 28), fill=rgb or SURF, outline=EDGE if rgb else (74, 83, 97), width=1)
             self.t((X0 + 34, y + 18), label, F(12), FG, "lm")
             if on:
                 self.t((X1 - 2, y + 18), "✓", F(12, "b"), TEAL, "rm")
-            else:
+            elif len(r) > 5 and r[5]:  # "Your color" opens the editor
                 self.t((X1 - 2, y + 18), "›", F(12), DIM, "rm")
             d.line([(X0, y + 35), (X1, y + 35)], fill=DIV)
             hits.append(((0, y, W, y + 36), fn))
@@ -1462,7 +1500,7 @@ class App:
                 hits.append(((bx, y + 22, bx + w, y + 48), lambda o=o: fn(o)))
             d.line([(X0, y + 53), (X1, y + 53)], fill=DIV)
         elif k in ("note", "para"):
-            f, lh, col = (F(9), 12, DIM) if k == "note" else (F(12), 16, FG)
+            f, lh, col = (F(9), 16, DIM) if k == "note" else (F(12), 16, FG)
             for i, line in enumerate(wrap(d, r[1], f, W - 24)):
                 self.t((X0 + 2, y + 4 + i * lh), line, f, col)
         elif k == "btn":
@@ -1548,45 +1586,72 @@ class App:
             self.t((10, y), f"{n} ", F(10), DIM)
             self.t((10 + self.d.textlength(n + " ", font=F(10)), y), f"{t2} {a2}".strip(), F(10, "b"), FG)
             y += 13
-        if self.cfg["sig"]:
-            self.t((10, y), self.fit(self.cfg["sig"], F(10, "s"), 150), F(10, "s"), TEAL)
         wx = self.g("wx")
         self.wx_icon(W - 26, 42, wx["code"] if wx else None)
         self.t((W - 10, 74), f"{round(wx['now'])}°" if wx else "--°", F(15, "b"), FG, "rs")
         self.t((W - 10, 86), self.fit(self.cfg["city"]["name"], F(9), 80), F(9), DIM, "rm")
         self.btn((150, 22, W, 94), lambda: self.go("weather"))
         a = self.active_sim()
+        sim, cell, rep = self.g("sim", {}), self.g("cell", {}), self.g("rep", {})
+        conn = lib.get_wan_conn_type(cell)
+        sig = (lib.get_cell_signal(cell) or (0, "")) if cell else (0, "")
+        # The top card answers "am I online, and through what?": the uplink's name leads, its type and strength ride in the chip,
+        # and the SIM's data use is the footnote (it used to lead, reading "data off" even when the Wi-Fi uplink was fine).
+        if sim.get("airplane") or not conn:
+            title, tcol, chip, kind, dest = "Offline", WARNFG, None, "warn", lambda: self.open_set("internet")
+        elif conn == "Repeater":
+            dbm = rep.get("signal") or -100
+            q = "Strong" if dbm > -60 else "Fair" if dbm > -72 else "Weak"
+            title, tcol, chip, kind, dest = rep.get("ssid") or "Wi-Fi", FG, "Wi-Fi · " + q, {"Strong": "teal", "Fair": "gray", "Weak": "warn"}[q], lambda: self.tab("wifi")
+        elif conn == "Ethernet":
+            title, tcol, chip, kind, dest = "Ethernet", FG, "Wired", "teal", lambda: self.open_set("internet")
+        else:
+            q = "Strong" if sig[0] >= 3 else "Fair" if sig[0] == 2 else "Weak"
+            title, tcol, chip, kind, dest = a["name"], FG, f"{conn} · {q}", {"Strong": "teal", "Fair": "gray", "Weak": "warn"}[q], lambda: self.tab("sim")
+        mobile_up = conn not in (None, "Repeater", "Ethernet")
+        if sim.get("airplane"):
+            sub = "Airplane mode"
+        else:
+            sub = (a["slot"] if mobile_up else f"{a['name']} {a['slot']}") + (" · locked" if a["locked"] else "" if self.data_on() else " · data off")
+            if self.data_on() and not a["locked"]:
+                sub += f" · {a['used']:.1f} of {a['cap']} GB" if a["cap"] else f" · {a['used']:.1f} GB used"
+        show_bar = self.data_on() and bool(a["cap"]) and not a["locked"] and not sim.get("airplane")
+        y1 = 114 if show_bar else 119
         self.card((10, 100, W - 10, 154))
-        self.t((20, 114), a["name"], F(13, "b"), FG, "lm")
-        self.t((24 + self.d.textlength(a["name"], font=F(13, "b")), 115),
-               a["slot"] + (" · locked" if a["locked"] else "" if self.data_on() else " · data off"), F(10), DIM, "lm")
-        self.chip(W - 20, 107, lib.get_wan_conn_type(self.g("cell", {})) or "Offline")
-        self.t((20, 132), f"{a['used']:.1f} GB used", F(10), FG, "lm")
-        self.t((W - 20, 132), f"of {a['cap']} GB" if a["cap"] else "no cap set", F(10), DIM, "rm")
-        self.bar(20, 141, W - 20, a["pct"])
-        self.btn((10, 100, W - 10, 154), lambda: self.tab("sim"))
+        cw = self.chip(W - 20, y1 - 8, chip, kind) + 8 if chip else 0
+        self.t((20, y1), self.fit(title, F(13, "b"), W - 40 - cw), F(13, "b"), tcol, "lm")
+        self.t((20, y1 + 17), self.fit(sub, F(10), W - 40), F(10), DIM, "lm")
+        if show_bar:
+            self.bar(20, 141, W - 20, a["pct"])
+        self.btn((10, 100, W - 10, 154), dest)
+        # Two rows of label-over-value tiles on one grid (inset 9 px): Devices, Speed / VPN, Texts.
         cl = self.g("clients", [])
-        self.card((10, 160, 117, 206))
+        online = sum(1 for c in cl if c["online"])
+        self.card((10, 160, 117, 204))
         self.t((19, 171), "DEVICES", F(9, "s"), DIM, "lm")
-        self.t((19, 192), str(sum(1 for c in cl if c["online"])), F(16, "b"), FG, "lm")
-        self.t((19 + self.d.textlength(str(sum(1 for c in cl if c["online"])), font=F(16, "b")) + 4, 194), "online", F(10), DIM, "lm")
-        self.btn((10, 160, 117, 206), lambda: self.open_set("clients"))
-        self.card((123, 160, W - 10, 206))
+        self.t((19, 190), str(online), F(16, "b"), FG, "lm")
+        self.t((19 + self.d.textlength(str(online), font=F(16, "b")) + 4, 192), "online", F(10), DIM, "lm")
+        self.btn((10, 160, 117, 204), lambda: self.open_set("clients"))
+        self.card((123, 160, W - 10, 204))
         self.t((132, 171), "SPEED", F(9, "s"), DIM, "lm")
-        self.t((132, 188), f"↓ {self.mon['down']:.1f}", F(11, "b"), FG, "lm")
-        self.t((185, 188), f"↑ {self.mon['up']:.1f}", F(11), DIM, "lm")
-        self.t((132, 200), "Mbps", F(8), DIM, "lm")
-        self.btn((123, 160, W - 10, 206), lambda: self.go("monitor"))
+        self.t((132 + self.d.textlength("SPEED", font=F(9, "s")) + 5, 172), "Mbps", F(8), DIM, "lm")
+        self.t((132, 190), f"↓ {self.mon['down']:.1f}", F(11, "b"), FG, "lm")
+        self.t((185, 190), f"↑ {self.mon['up']:.1f}", F(11), DIM, "lm")
+        self.btn((123, 160, W - 10, 204), lambda: self.go("monitor"))
         wga = self.g("wga")
-        self.card((10, 212, 117, 244))
-        self.t((20, 228), self.fit("VPN · " + vpn_label(self.peer_name(wga)).split(" · ")[0] if wga else "VPN off", F(11, "s"), 90), F(11, "s"), FG, "lm")
-        self.btn((10, 212, 117, 244), lambda: self.tab("vpn"))
-        self.card((123, 212, W - 10, 244))
-        self.t((141, 228), "Texts", F(11, "s"), FG, "lm")
+        self.card((10, 208, 117, 244))
+        self.t((19, 218), "VPN", F(9, "s"), DIM, "lm")
+        tsu = self.ts_connected()  # WireGuard (the tunnel) and Tailscale (its own service) are named apart; both up reads "2 connected" (the VPN tab has the detail)
+        vpn_val = "2 connected" if wga and tsu else vpn_label(self.peer_name(wga)).split(" · ")[0] if wga else "Tailscale" if tsu else "Off"
+        self.t((19, 233), self.fit(vpn_val, F(11, "s"), 90), F(11, "s"), TEAL if (wga or tsu) else DIM, "lm")
+        self.btn((10, 208, 117, 244), lambda: self.tab("vpn"))
+        self.card((123, 208, W - 10, 244))
+        self.t((132, 218), "TEXTS", F(9, "s"), DIM, "lm")
         u = len(self.unread())
-        if u:
-            self.chip(W - 18, 221, f"{u} new", "warn")
-        self.btn((123, 212, W - 10, 244), lambda: self.go("texts"))
+        self.t((132, 233), f"{u} new" if u else "All read", F(11, "s"), WARNFG if u else DIM, "lm")
+        self.btn((123, 208, W - 10, 244), lambda: self.go("texts"))
+        if self.cfg["sig"]:  # the empty strip above the tab bar: up top it ran into the SIM card whenever the second clock was on
+            self.t((W / 2, 260), self.fit(self.cfg["sig"], F(11, "s"), W - 30), F(11, "s"), TEAL, "mm")
 
     def peer_name(self, pid):
         for p in self.g("wgp", []):
@@ -1595,59 +1660,57 @@ class App:
         return pid or ""
 
     def v_sim(self):
-        self.header("Mobile", lambda: self.tab("home"))
+        self.header("SIM & data", lambda: self.tab("home"))
         s = self.g("sims", {"cur": "1", "slot2_type": 0, "names": {}, "traffic": {}})
         cur = "sim1" if s["cur"] == "1" else ("esim" if s["slot2_type"] == 1 else "sim2")
         names = s["names"]
         sim = self.g("sim", {})
         data_on = self.data_on()
-        self.rows(56, 92, [("toggle", "Mobile data", data_on, self.toggle_data)], "sim_data")
-        rows = [("sim1", names.get("1", "SIM1"), "SIM1", "1"),
-                ("sim2", names.get("2", "SIM2") if s["slot2_type"] == 0 else "SIM2", "SIM2", "2"),
-                ("esim", names.get("2", "eSIM") if s["slot2_type"] == 1 else "eSIM", "eSIM · slot 2", "2")]
-        y = 94
-        for key, name, kind, slot in rows:
-            on = key == cur and data_on  # with mobile data off, no carrier is in use
-            active_type = (key == "sim1") or (key == "sim2" and s["slot2_type"] == 0) or (key == "esim" and s["slot2_type"] == 1)
-            self.card((10, y, W - 10, y + 38), fill=TEALBG if on else SURF, edge=TEAL2 if on else EDGE)
-            self.d.ellipse((20, y + 12, 34, y + 26), outline=TEAL if on else (74, 83, 97), width=2)
-            if on:
-                self.d.ellipse((24, y + 16, 30, y + 22), fill=TEAL)
-            busy = not on and not active_type
-            lk = (s.get("locks") or {}).get(slot) or {}
-            locked = active_type and lk.get("status") in (lib.SIM_PIN_NEEDED, lib.SIM_PUK_NEEDED)
-            cw = self.chip(W - 18, y + 5, "Locked ›" if locked else "In use ›" if on else ("Slot 2 busy" if busy else "Ready"),
-                           "warn" if locked else "teal" if on else "gray")
-            nm = self.fit(name, F(12, "b"), 80)
-            self.t((42, y + 13), nm, F(12, "b"), FG, "lm")
-            if kind != name:  # "SIM2 SIM2" when the SIM has no carrier name
-                self.t((46 + self.d.textlength(nm, font=F(12, "b")), y + 14),
-                       self.fit(kind, F(9), W - 18 - cw - 52 - self.d.textlength(nm, font=F(12, "b"))), F(9), DIM, "lm")
-            cap = self.cfg["caps"].get(key)
-            used = s["traffic"].get(slot, 0) / 1e9 if active_type else 0
-            phone = fmt_phone(s.get("phones", {}).get(slot)) if active_type else ""
-            usage = (f"{used:.1f} / {cap} GB" if cap else f"{used:.1f} GB used") if phone else \
-                (f"{used:.1f} of {cap} GB this month" if cap else f"{used:.1f} GB this month")
-            line = (f"{phone} · {usage}" if phone else usage) if active_type else \
-                "Turns SIM2 off when used" if key == "esim" else "Turns eSIM off when used" if key == "sim2" else ""
-            self.t((42, y + 28), self.fit(line, F(9), W - 60), F(9), DIM, "lm")
-            if locked:
-                fn = lambda sl=int(slot), k=key: self.open_unlock(sl, k)
-            elif on:
-                fn = lambda: self.go("sim_detail")
-            elif not data_on:
-                fn = lambda k=key, n=name: self.ask_data_with(k, n, k == cur)
-            else:
-                fn = lambda k=key, n=name: self.ask_switch(k, n)
-            self.btn((10, y, W - 10, y + 38), fn)
-            y += 41
-        note = "Mobile data is off. Tap a SIM to use it." if not data_on else "SIM2 and eSIM share slot 2: one at a time."
-        self.t((12, y + 2), self.fit(note, F(9), W - 24), F(9), DIM)
+        rows = [("toggle", "Mobile data", data_on, self.toggle_data)]
+        for key, name, kind, slot in [("sim1", names.get("1", "SIM1"), "SIM1", "1"),
+                                      ("sim2", names.get("2", "SIM2") if s["slot2_type"] == 0 else "SIM2", "SIM2", "2"),
+                                      ("esim", names.get("2", "eSIM") if s["slot2_type"] == 1 else "eSIM", "eSIM · slot 2", "2")]:
+            rows.append(("simcard", lambda y, key=key, name=name, kind=kind, slot=slot: self.sim_card(y, key, name, kind, slot, s, cur, data_on)))
         fo = self.g("failover")
-        self.rows(y + 15, 276, [("toggle", "Data roaming", sim.get("roaming", False), self.toggle_roam),
-                                ("link", "SIM failover", ("On" if fo.get("enable_switch") else "Off") if fo else "", lambda: self.go("failover")),
-                                ("link", "eSIM information", "", self.open_esim)],
-                  "sim_rows")
+        rows += [("note", "Data is off. Tap a SIM to use it." if not data_on else "SIM2 and eSIM share one slot."),
+                 ("toggle", "Data roaming", sim.get("roaming", False), self.toggle_roam),
+                 ("link", "SIM failover", ("On" if fo.get("enable_switch") else "Off") if fo else "", lambda: self.go("failover")),
+                 ("link", "eSIM information", "", self.open_esim)]
+        self.rows(56, 276, rows, "sim_rows")  # one list, so the whole page scrolls (the cards used to be fixed and left a 40 px strip for the rest)
+
+    def sim_card(self, y, key, name, kind, slot, s, cur, data_on):
+        """One SIM card, drawn at y on whatever surface self.d is now (the scrolling layer); returns what a tap does."""
+        on = key == cur and data_on  # with mobile data off, no carrier is in use
+        active_type = (key == "sim1") or (key == "sim2" and s["slot2_type"] == 0) or (key == "esim" and s["slot2_type"] == 1)
+        self.card((10, y, W - 10, y + 38), fill=TEALBG if on else SURF, edge=TEAL2 if on else EDGE)
+        self.d.ellipse((20, y + 12, 34, y + 26), outline=TEAL if on else (74, 83, 97), width=2)
+        if on:
+            self.d.ellipse((24, y + 16, 30, y + 22), fill=TEAL)
+        busy = not on and not active_type
+        lk = (s.get("locks") or {}).get(slot) or {}
+        locked = active_type and lk.get("status") in (lib.SIM_PIN_NEEDED, lib.SIM_PUK_NEEDED)
+        cw = self.chip(W - 18, y + 5, "Locked ›" if locked else "In use ›" if on else ("Slot 2 busy" if busy else "Ready"),
+                       "warn" if locked else "teal" if on else "gray")
+        nm = self.fit(name, F(12, "b"), 80)
+        self.t((42, y + 13), nm, F(12, "b"), FG, "lm")
+        if kind != name:  # "SIM2 SIM2" when the SIM has no carrier name
+            self.t((46 + self.d.textlength(nm, font=F(12, "b")), y + 14),
+                   self.fit(kind, F(9), W - 18 - cw - 52 - self.d.textlength(nm, font=F(12, "b"))), F(9), DIM, "lm")
+        cap = self.cfg["caps"].get(key)
+        used = s["traffic"].get(slot, 0) / 1e9 if active_type else 0
+        phone = fmt_phone(s.get("phones", {}).get(slot)) if active_type else ""
+        usage = (f"{used:.1f} / {cap} GB" if cap else f"{used:.1f} GB used") if phone else \
+            (f"{used:.1f} of {cap} GB this month" if cap else f"{used:.1f} GB this month")
+        line = (f"{phone} · {usage}" if phone else usage) if active_type else \
+            "Turns SIM2 off when used" if key == "esim" else "Turns eSIM off when used" if key == "sim2" else ""
+        self.t((42, y + 28), self.fit(line, F(9), W - 60), F(9), DIM, "lm")
+        if locked:
+            return lambda sl=int(slot), k=key: self.open_unlock(sl, k)
+        if on:
+            return lambda: self.go("sim_detail")
+        if not data_on:
+            return lambda k=key, n=name: self.ask_data_with(k, n, k == cur)
+        return lambda k=key, n=name: self.ask_switch(k, n)
 
     SIM_LABELS = {"sim1": "SIM1", "sim2": "SIM2", "esim": "eSIM"}
 
@@ -1794,18 +1857,28 @@ class App:
         self.r.request("bands")
         self.go("bands")
 
-    def v_bands(self):
-        self.header("Network & bands")
+    def bands_ctx(self):
+        """(modem state, the edit copy) for the two band pages; the copy is None while the modem can't be read or has no band settings.
+        It is made on first use and kept while you move between the pages; Apply or leaving the SIM page throws it away."""
         st = self.g("bands")
+        if not st or not st["supports"]:
+            return st, None
+        if self.sel.get("bands") is None or self.sel["bands"]["slot"] != st["slot"]:
+            self.sel["bands"] = {"slot": st["slot"], "enable": st["enable"], "mode": st["mode"], "list": {g: list(v) for g, v in st["list"].items()}}
+        return st, self.sel["bands"]
+
+    BAND_LABELS = (("NR-SA", "5G NR SA", "n"), ("NR-NSA", "5G NR NSA", "n"), ("LTE", "4G LTE", "B"))
+
+    def v_bands(self):
+        """Network type and band masking (the stock web UI's pair). The band chips live one level down, behind "Allowed bands"."""
+        self.header("Network & bands")
+        st, b = self.bands_ctx()
         if not st:
             self.rows(56, H, [("note", "Reading the modem…")])
             return
-        if not st["supports"]:
+        if b is None:
             self.rows(56, H, [("note", "This SIM's modem doesn't support network type or band settings.")])
             return
-        if self.sel.get("bands") is None or self.sel["bands"]["slot"] != st["slot"]:
-            self.sel["bands"] = {"slot": st["slot"], "enable": st["enable"], "mode": st["mode"], "list": {g: list(v) for g, v in st["list"].items()}}
-        b = self.sel["bands"]
         sup = st["supported"]
         warn = lib.band_warnings(b["enable"], b["mode"], b["list"], sup)
         mode_name = {v: n for n, v in lib.NETWORK_MODES}
@@ -1820,24 +1893,14 @@ class App:
             if b["enable"] and not any(b["list"].values()):  # stock: switching it on starts with every band ticked
                 b["list"] = {g: list(sup[g]) for g in lib.BAND_GROUPS}
             self.dirty = True
-
-        def flip(group, band):
-            cur = b["list"][group]
-            b["list"][group] = [x for x in cur if x != band] if band in cur else sorted(cur + [band])
-            self.dirty = True
-
-        def flip_all(group):
-            b["list"][group] = [] if sup[group] and len(b["list"][group]) == len(sup[group]) else list(sup[group])
-            self.dirty = True
         rows = [("seg", "Network type", names, mode_name.get(b["mode"], "Auto"), set_mode),
                 ("note", "Select 5G for faster speed (requires 5G signal) or 4G for stability."),
                 ("toggle", "Band masking", b["enable"], set_enable)]
         if b["enable"]:
-            for g, label, prefix in (("NR-SA", "5G NR SA", "n"), ("NR-NSA", "5G NR NSA", "n"), ("LTE", "4G LTE", "B")):
-                if sup[g] and not (g != "LTE" and b["mode"] == "LTE"):
-                    rows.append(("bands", label, sup[g], b["list"][g], prefix, lambda x, g=g: flip(g, x), lambda g=g: flip_all(g), warn[g]))
-            rows.append(("note", "Only the ticked bands are used. Tick at least one allowed band." if any(warn.values()) else
-                         "Only the ticked bands are used. To undo, switch Band masking off and apply."))
+            shown = [g for g, _, _ in self.BAND_LABELS if sup[g] and not (g != "LTE" and b["mode"] == "LTE")]
+            picked, total = sum(len(b["list"][g]) for g in shown), sum(len(sup[g]) for g in shown)
+            rows += [("link", "Allowed bands", "Pick at least one" if any(warn.values()) else f"{picked} of {total}", lambda: self.go("bands_pick")),
+                     ("note", "Only the allowed bands are used. To undo, switch Band masking off and apply.")]
         same = (b["enable"], b["mode"]) == (st["enable"], st["mode"]) and (not b["enable"] or b["list"] == st["list"])
         can = not any(warn.values()) and not same
 
@@ -1849,7 +1912,30 @@ class App:
                     raise RuntimeError("The router refused that")
             self.confirm("Apply these network settings?", "Mobile data reconnects for a moment, and devices may lose internet while it does.", "Apply",
                          lambda: self.work("Applying", run, ("bands", "siminfo", "cell", "sim"), lambda: self.sel.pop("bands", None)))
-        rows.append(("btn", "Apply", apply if can else (lambda: self.say("Nothing to apply" if same else "Fix the red flags first")), "pri" if can else ""))
+        rows.append(("btn", "Apply", apply if can else (lambda: self.say("Nothing to apply" if same else "Choose at least one band first")), "pri" if can else ""))
+        self.rows(56, H, rows)
+
+    def v_bands_pick(self):
+        """The band chips (5G SA, 5G NSA, 4G LTE): tick the bands the modem may use. Nothing is sent from here; Apply is on the page before."""
+        self.header("Allowed bands")
+        st, b = self.bands_ctx()
+        if b is None:
+            self.rows(56, H, [("note", "The band settings aren't available right now.")])
+            return
+        sup = st["supported"]
+        warn = lib.band_warnings(b["enable"], b["mode"], b["list"], sup)
+
+        def flip(group, band):
+            cur = b["list"][group]
+            b["list"][group] = [x for x in cur if x != band] if band in cur else sorted(cur + [band])
+            self.dirty = True
+
+        def flip_all(group):
+            b["list"][group] = [] if sup[group] and len(b["list"][group]) == len(sup[group]) else list(sup[group])
+            self.dirty = True
+        rows = [("bands", label, sup[g], b["list"][g], prefix, lambda x, g=g: flip(g, x), lambda g=g: flip_all(g), warn[g])
+                for g, label, prefix in self.BAND_LABELS if sup[g] and not (g != "LTE" and b["mode"] == "LTE")]
+        rows.append(("note", "Tick at least one allowed band." if any(warn.values()) else "Go back to apply the change."))
         self.rows(56, H, rows)
 
     def v_failover(self):
@@ -1946,23 +2032,12 @@ class App:
             self.dirty = True
         self.rows(86, H, [("link", "Details & info", "", lambda: (self.r.request("siminfo"), self.go("sim_info"))),
                           ("link", "Network & bands", "", self.open_bands), ("head", "Monthly data cap")] +
-                  [("link", f"{c} GB" if c else "No cap", "✓" if self.cfg["caps"].get(a["key"]) == c else "", lambda c=c: setcap(c))
+                  [("pick", f"{c} GB" if c else "No cap", self.cfg["caps"].get(a["key"]) == c, lambda c=c: setcap(c))
                    for c in CAP_OPTS] + [("note", "Usage is counted from the 1st of each month and kept through reboots. The cap is only shown here; it doesn't cut data off.")])
 
     def v_wifi(self):
         self.header("Wi-Fi", lambda: self.tab("home"))
         rep = self.g("rep", {})
-        self.card((10, 58, W - 10, 108))
-        self.t((20, 69), "INTERNET FROM WI-FI", F(9, "s"), DIM, "lm")
-        if rep.get("connected"):
-            self.t((20, 86), self.fit(rep.get("ssid"), F(13, "b"), 140), F(13, "b"), FG, "lm")
-            sig = rep.get("signal") or -100
-            self.t((20, 100), "Connected · " + ("strong" if sig > -60 else "fair" if sig > -72 else "weak") + " signal", F(9), DIM, "lm")
-        else:
-            self.t((20, 88), "Not connected", F(13, "b"), FG, "lm")
-        self.d.rounded_rectangle((W - 74, 74, W - 20, 100), radius=8, outline=(57, 66, 79))
-        self.t((W - 47, 87), "Change" if rep.get("connected") else "Join", F(10, "s"), FG, "mm")
-        self.btn((W - 80, 66, W - 10, 108), self.open_join)
         cl = self.g("clients", [])
         wf = self.g("wifi", {})
         tab = self.sel.get("wifi_tab", "Main")
@@ -1973,15 +2048,15 @@ class App:
                 self.scroll.pop("wifi_rows", None)
                 self.dirty = True
         X0, X1 = 10, W - 10
-        self.card((X0, 114, X1, 140), r=8)
+        self.card((X0, 58, X1, 84), r=8)  # the only fixed part: Main / Guest. Everything else, the Wi-Fi uplink card included, scrolls
         sw = (X1 - X0 - 4) / 2
         for i, o in enumerate(("Main", "Guest")):
             bx = X0 + 2 + i * sw
             if o == tab:
-                self.d.rounded_rectangle((bx, 116, bx + sw, 138), radius=6, fill=TGOFF)
+                self.d.rounded_rectangle((bx, 60, bx + sw, 82), radius=6, fill=TGOFF)
             on = wf.get("2g") or wf.get("5g") if o == "Main" else wf.get("g2") or wf.get("g5")
-            self.t((bx + sw / 2, 127), o + ("" if on else " · off"), F(10, "s"), FG if o == tab else DIM, "mm")
-            self.btn((bx, 112, bx + sw, 142), lambda o=o: pick_tab(o))
+            self.t((bx + sw / 2, 71), o + ("" if on else " · off"), F(10, "s"), FG if o == tab else DIM, "mm")
+            self.btn((bx, 56, bx + sw, 86), lambda o=o: pick_tab(o))
 
         def band(iface, label, guest):
             on = self.wifi_state(iface, "", not guest)[0]
@@ -1995,7 +2070,7 @@ class App:
                     self.channel_row(iface, label),
                     self.txpower_row(iface, label)]
         if tab == "Main":
-            rows = band("wifi2g", "2.4 GHz", False) + band("wifi5g", "5 GHz", False) + [
+            rows = [("upcard", lambda y: self.wifi_uplink_card(y, rep))] + band("wifi2g", "2.4 GHz", False) + band("wifi5g", "5 GHz", False) + [
                 ("head", ""),
                 ("link", "Share Wi-Fi", "QR code", lambda: (self.sel.__setitem__("share_set", "main"), self.go("share"))),
                 *self.band_rows(),
@@ -2006,7 +2081,21 @@ class App:
             if wf.get("g2") or wf.get("g5"):
                 rows += [("head", ""), ("link", "Share guest Wi-Fi", "QR code", lambda: (self.sel.__setitem__("share_set", "guest"), self.go("share")))]
             rows.append(("note", "Guests get internet but can't see your devices or each other. Network mode, channel and TX power are shared with the main Wi-Fi on the same band."))
-        self.rows(144, 276, rows, "wifi_rows")
+        self.rows(90, 276, rows, "wifi_rows")
+
+    def wifi_uplink_card(self, y, rep):
+        """"Internet from Wi-Fi" card (first row of the Main list): which Wi-Fi the router borrows its internet from, and the button to change it."""
+        self.card((10, y, W - 10, y + 58))
+        self.t((20, y + 12), "INTERNET FROM WI-FI", F(9, "s"), DIM, "lm")
+        if rep.get("connected"):
+            self.t((20, y + 30), self.fit(rep.get("ssid"), F(13, "b"), 140), F(13, "b"), FG, "lm")
+            sig = rep.get("signal") or -100
+            self.t((20, y + 47), "Connected · " + ("strong" if sig > -60 else "fair" if sig > -72 else "weak") + " signal", F(9), DIM, "lm")
+        else:
+            self.t((20, y + 32), "Not connected", F(13, "b"), FG, "lm")
+        self.d.rounded_rectangle((W - 74, y + 18, W - 20, y + 46), radius=8, outline=(57, 66, 79))
+        self.t((W - 47, y + 32), "Change" if rep.get("connected") else "Join", F(10, "s"), FG, "mm")
+        return self.open_join
 
     WIFI_KEYS = {"wifi2g": "2g", "wifi5g": "5g", "guest2g": "g2", "guest5g": "g5"}
 
@@ -2432,20 +2521,9 @@ class App:
         if iface not in [b[0] for b in bands]:
             iface = bands[0][0]
         ssid, key = wifi_info(iface)
-        m = qr_matrix(wifi_qr_text(ssid, key, lib.uci_get(f"wireless.{iface}.encryption", "psk2")))
         box = 140
         x0, y0 = (W - box) // 2, 58
-        self.d.rounded_rectangle((x0, y0, x0 + box, y0 + box), radius=8, fill=(255, 255, 255))
-        if m:
-            n = len(m)
-            sc = max(1, (box - 16) // n)
-            ox, oy = x0 + (box - sc * n) // 2, y0 + (box - sc * n) // 2
-            for r, row in enumerate(m):
-                for c, dark in enumerate(row):
-                    if dark:
-                        self.d.rectangle((ox + c * sc, oy + r * sc, ox + c * sc + sc - 1, oy + r * sc + sc - 1), fill=(0, 0, 0))
-        else:
-            self.t((W / 2, y0 + box / 2), "QR unavailable", F(10), (90, 96, 106), "mm")
+        self.draw_qr(wifi_qr_text(ssid, key, lib.uci_get(f"wireless.{iface}.encryption", "psk2")), x0, y0, box)
         self.t((W / 2, y0 + box + 12), "Scan with a phone camera to join", F(9), DIM, "mm")
         self.t((W / 2, y0 + box + 28), self.fit(ssid, F(12, "b"), 220), F(12, "b"), FG, "mm")
         self.t((W / 2, y0 + box + 44), self.fit(f"Password: {key}" if key else "Open network, no password", F(10), 220), F(10), DIM, "mm")
@@ -2454,6 +2532,75 @@ class App:
                 self.sel["share_band"] = next(i for i, l in bands if l == label)
                 self.dirty = True
             self.rows(250, H, [("seg", "", [l for _, l in bands], dict(bands)[iface], pick)], "share_seg")
+
+    def draw_qr(self, text, x0, y0, box):
+        """A QR code on a white plate (quiet zone included), box px square at (x0, y0). Shows "QR unavailable" if qrencode isn't there."""
+        m = qr_matrix(text)
+        self.d.rounded_rectangle((x0, y0, x0 + box, y0 + box), radius=8, fill=(255, 255, 255))
+        if not m:
+            self.t((x0 + box / 2, y0 + box / 2), "QR unavailable", F(10), (90, 96, 106), "mm")
+            return
+        n = len(m)
+        sc = box // (n + 8)  # a 4-module quiet zone on every side, as the QR spec asks...
+        if sc < 3:
+            sc = max(1, (box - 16) // n)  # ...unless that makes modules too small to scan (long Wi-Fi codes): keep the old, tighter fit
+        ox, oy = x0 + (box - sc * n) // 2, y0 + (box - sc * n) // 2
+        for r, row in enumerate(m):
+            for c, dark in enumerate(row):
+                if dark:
+                    self.d.rectangle((ox + c * sc, oy + r * sc, ox + c * sc + sc - 1, oy + r * sc + sc - 1), fill=(0, 0, 0))
+
+    def admin_url(self):
+        return "http://" + (lib.get_system_info().get("lan_ip", "") or "10.10.1.1")
+
+    def v_admin_qr(self):
+        """The router's admin panel as a QR code: the places this screen says "use the admin panel" (firmware install, Tailscale sign-in, VPN
+        servers, APN...) can't be finished on a 240x320 screen, so the phone in your hand takes over."""
+        self.header("Admin panel")
+        url = self.admin_url()
+        box = 130
+        self.draw_qr(url, (W - box) // 2, 56, box)
+        self.t((W / 2, 56 + box + 14), url, F(12, "b"), FG, "mm")
+        for i, line in enumerate(wrap(self.d, "Scan with a phone on this router's Wi-Fi, then sign in with your router password.", F(9), W - 30)[:3]):
+            self.t((W / 2, 56 + box + 34 + i * 16), line, F(9), DIM, "mm")
+
+    def open_admin_qr(self):
+        self.go("admin_qr")
+
+    def open_ts_login(self):
+        """Tailscale "Device Bind Link" (stock tailscale.get_auth_url): fetched in the background, shown as a QR code to scan with a phone."""
+        st = self.sel["tslogin"] = {"state": "loading", "url": ""}
+        self.go("ts_login")
+
+        def run():
+            try:
+                url = lib.get_tailscale_auth_url()
+            except Exception:
+                url = None
+            st.update(state="ok" if url else "error", url=url or "")
+            self.dirty = True
+        threading.Thread(target=run, daemon=True).start()
+
+    def v_ts_login(self):
+        self.header("Sign in to Tailscale")
+        st = self.sel.get("tslogin") or {"state": "error", "url": ""}
+        if st["state"] == "loading":
+            self.spinner(W / 2, 120, 14)
+            self.t((W / 2, 156), "Getting your sign-in link…", F(12, "b"), FG, "mm")
+            return
+        if st["state"] == "ok":
+            box = 136
+            self.draw_qr(st["url"], (W - box) // 2, 56, box)
+            for i, line in enumerate(wrap(self.d, "Scan with your phone's camera and sign in to Tailscale. The card says Connected when you're done.", F(9), W - 30)[:3]):
+                self.t((W / 2, 56 + box + 18 + i * 16), line, F(9), DIM, "mm")
+            return
+        self.rows(56, H, [("note", "Couldn't get a sign-in link. Tailscale may still be starting: wait a few seconds and try again, or sign in from the admin panel."),
+                          ("btn", "Try again", self.open_ts_login_again, "pri"),
+                          ("link", "Admin panel", "QR code", self.open_admin_qr)])
+
+    def open_ts_login_again(self):
+        self.back()
+        self.open_ts_login()
 
     def vpn_switch(self):
         """The stock "Use" switch (VPN page and quick-panel tile): turn the tunnel on or off, keeping its server."""
@@ -2543,34 +2690,85 @@ class App:
             self.say("Wrong password. Old one restored." if back else "Wrong password. Couldn't rejoin.")
         self.work("Changing password", run, ("rep", "cell", "savedap"))
 
+    TS_STATUS = {1: "Tap to sign in (QR code)", 2: "Needs your approval", 3: "Connected", 4: "Connecting…"}
+
+    def ts_connected(self):
+        """Tailscale is up (status 3 from the stock tailscale.get_status). False while it is off, still signing in, or not read yet."""
+        ts = self.g("ts")
+        return bool(ts and ts["enabled"] and ts["status"] == 3)
+
+    def vpn_text(self, wga):
+        """The one VPN sentence for the lock screen: WireGuard (the tunnel) and Tailscale (its own service) are separate, so name both when both are up."""
+        wg, tsu = bool(wga), self.ts_connected()
+        label = vpn_label(self.peer_name(wga)) if wga else ""
+        if wg and tsu:
+            return label.split(" · ")[0] + " + Tailscale"
+        return label if wg else "Tailscale on" if tsu else "Off"
+
+    def tailscale_switch(self):
+        """The stock Use switch for Tailscale: off sends {enabled: false}; on sends the saved config with enabled true. Stock waits a few seconds, then re-reads."""
+        ts = self.g("ts")
+        if not ts:
+            self.say("Reading Tailscale…")
+            return
+        on = not ts["enabled"]
+
+        def run():
+            if not lib.set_tailscale_enabled(on, ts["config"]):
+                raise RuntimeError("The router refused that")
+            time.sleep(5)
+        self.work("Turning Tailscale " + ("on" if on else "off"), run, ("ts",), lambda: self.r.put("ts", lib.get_tailscale()))
+
     def v_vpn(self):
         self.header("VPN", lambda: self.tab("home"))
         wga, t = self.g("wga"), self.g("vpnt")
         peers = self.g("wgp", [])
         on = bool(wga)
-        cx, cy = W // 2, 96
-        self.d.ellipse((cx - 40, cy - 40, cx + 40, cy + 40), fill=TEALBG if on else SURF, outline=TEAL if on else (57, 66, 79), width=3)
+        cx, cy = W // 2, 87
+        self.d.ellipse((cx - 33, cy - 33, cx + 33, cy + 33), fill=TEALBG if on else SURF, outline=TEAL if on else (57, 66, 79), width=3)
         col = TEAL if on else DIM
         self.d.arc((cx - 12, cy - 16, cx + 12, cy + 8), 300, 240, fill=col, width=3)
         self.d.line([(cx, cy - 20), (cx, cy - 5)], fill=col, width=3)
-        self.t((cx, cy + 24), "On" if on else "Off", F(11, "b"), col, "mm")
-        self.btn((cx - 44, cy - 44, cx + 44, cy + 44), self.vpn_switch)
+        self.t((cx, cy + 21), "On" if on else "Off", F(11, "b"), col, "mm")
+        self.btn((cx - 38, cy - 38, cx + 38, cy + 38), self.vpn_switch)
         loc = t["peer"] if t and t["peer"] else None
-        cap = f"All devices go through {vpn_label(self.peer_name(wga))}." if on else \
-            ("Switch on to connect. Devices use your normal connection until then." if loc else
-             "Choose a location to set up the VPN tunnel." if peers else "No WireGuard servers set up on this router.")
+        cap = f"WireGuard is on. All devices go through {vpn_label(self.peer_name(wga))}." if on else \
+            ("WireGuard is off. Devices use your normal connection." if loc else
+             "Choose a WireGuard location to set up the tunnel." if peers else "No WireGuard servers set up on this router.")
         for i, line in enumerate(wrap(self.d, cap, F(11), W - 40)[:2]):
-            self.t((W / 2, 152 + i * 14), line, F(11), DIM, "mm")
-        self.card((10, 184, W - 10, 218))
-        self.t((20, 201), "Location", F(12), FG, "lm")
-        self.t((W - 30, 201), self.fit(vpn_label(self.peer_name(loc)) if loc else "Choose", F(11, "b"), 130), F(11, "b"), FG, "rm")
-        self.t((W - 20, 201), "›", F(12), DIM, "rm")
-        self.btn((10, 184, W - 10, 218), lambda: self.go("vpn_loc"))
+            self.t((W / 2, 133 + i * 14), line, F(11), DIM, "mm")
+        y = 157
+        self.card((10, y, W - 10, y + 30))
+        self.t((20, y + 15), "Location", F(12), FG, "lm")
+        self.t((W - 30, y + 15), self.fit(vpn_label(self.peer_name(loc)) if loc else "Choose", F(11, "b"), 130), F(11, "b"), FG, "rm")
+        self.t((W - 20, y + 15), "›", F(12), DIM, "rm")
+        self.btn((10, y, W - 10, y + 30), lambda: self.go("vpn_loc"))
+        y += 34
         if t:
-            self.card((10, 224, W - 10, 258))
-            self.t((20, 241), "Settings", F(12), FG, "lm")
-            self.t((W - 20, 241), "›", F(12), DIM, "rm")
-            self.btn((10, 224, W - 10, 258), lambda: self.go("vpn_opts"))
+            self.card((10, y, W - 10, y + 30))
+            self.t((20, y + 15), "Settings", F(12), FG, "lm")
+            self.t((W - 20, y + 15), "›", F(12), DIM, "rm")
+            self.btn((10, y, W - 10, y + 30), lambda: self.go("vpn_opts"))
+            y += 34
+        ts = self.g("ts")
+        if ts is not None:  # Tailscale, the stock "Tailscale" switch: its own service, separate from the WireGuard tunnel above
+            self.card((10, y, W - 10, y + 36), fill=TEALBG if ts["enabled"] else SURF, edge=TEAL2 if ts["enabled"] else EDGE)
+            self.t((20, y + 12), "Tailscale", F(12, "b"), FG, "lm")
+            if ts["enabled"] and ts["status"] == 3:  # connected: the state is a chip beside the name and the address gets the whole second line (it was cut by the switch)
+                self.chip(20 + self.d.textlength("Tailscale", font=F(12, "b")) + 8, y + 4, "Connected", anchor_right=False)
+                sub = ts["ip"] or "Connected"
+            else:
+                sub = "Off" if not ts["enabled"] else self.TS_STATUS.get(ts["status"], "Starting…")
+            self.t((20, y + 26), self.fit(sub, F(9), W - 90), F(9), DIM, "lm")
+            if self.busy and "Tailscale" in self.busy[0]:
+                self.spinner(W - 29, y + 18, 9)
+            else:
+                self.toggle(W - 20, y + 18, ts["enabled"])
+            if ts["enabled"] and ts["status"] == 1:  # not signed in: the card opens the sign-in QR, only the switch itself toggles
+                self.btn((10, y, W - 70, y + 36), self.open_ts_login)
+                self.btn((W - 70, y, W - 10, y + 36), self.tailscale_switch)
+            else:
+                self.btn((10, y, W - 10, y + 36), self.tailscale_switch)
 
     def v_vpn_loc(self):
         self.header("VPN location")
@@ -2590,7 +2788,7 @@ class App:
                     raise RuntimeError("Didn't switch server")
             self.work("Setting VPN location", run, ("wga", "vpnt"), self.vpn_refresh)
         peers = sorted(self.g("wgp", []), key=lambda p: vpn_label(p["name"]))
-        self.rows(56, H, [("link", vpn_label(p["name"]), "✓" if p["id"] == cur else "", lambda p=p: pick(p)) for p in peers]
+        self.rows(56, H, [("pick", vpn_label(p["name"]), p["id"] == cur, lambda p=p: pick(p)) for p in peers]
                   or [("note", "No WireGuard servers are set up. Add them in the router's admin panel.")])
 
     def v_vpn_opts(self):
@@ -2620,28 +2818,38 @@ class App:
         self.header("More", lambda: self.tab("home"))
         sim, wx, cl = self.g("sim", {}), self.g("wx"), self.g("clients", [])
         u = len(self.unread())
-        rows = [("toggle", "Airplane mode", sim.get("airplane", False), self.toggle_air),
-                ("tiles", [("Texts", f"{u} unread" if u else "All read", lambda: self.go("texts")),
-                           ("Weather", f"{self.cfg['city']['name']} · {round(wx['now'])}°" if wx else self.cfg["city"]["name"], lambda: self.go("weather"))]),
-                ("tiles", [("Monitor", "Speed test inside", lambda: self.go("monitor")),
-                           ("Currency", f"{self.cfg['fx']} → {self.cfg['home_fx']}", lambda: self.go("fx"))]),
-                ("head", "Router settings")]
-        for label, val, key in (("Clients", f"{sum(1 for c in cl if c['online'])} online", "clients"), ("Internet", lib.get_wan_conn_type(self.g("cell", {})) or "", "internet"),
-                                ("Network", "Ethernet, IP", "network"), ("Display", self.cfg["bright"], "display"),
-                                ("Security", "Passcode on" if self.cfg["pass_on"] else "No passcode", "security"),
-                                ("Power & USB", (lambda b: f"{b[0]}%" if b else "")(lib.get_battery()), "power"),
-                                ("AdGuard Home", (lambda a: "Blocking" if a.get("enabled") and a.get("dns") else "On" if a.get("enabled") else "Off")(self.g("agh") or {}), "agh"), ("GL.iNet Account", "", "account")):
-            rows.append(("link", label, val, lambda k=key: self.open_set(k)))
         fw = self.g("fw")
         fw_val = "" if not fw else (f"{fw['new']} available" if fw.get("new") else "Up to date")
-        rows += [("link", "Dashboard", "Clocks, stock screen", lambda: self.go("dash")),
-                 ("link", "Firmware", fw_val, lambda: self.go("firmware")),
-                 ("link", "About device", "GL-E5800", lambda: self.open_set("about")),
-                 ("btn3", [("Screen off", self.screen_off, ""),
-                           ("Reboot", lambda: self.confirm("Reboot the router?", "Wi-Fi and internet drop for about a minute.", "Reboot",
-                                                           lambda: self.power("Restarting", lib.reboot_router), True), "danger"),
-                           ("Shut down", lambda: self.confirm("Shut down the router?", "Everything goes offline until you press the power button.",
-                                                              "Shut down", lambda: self.power("Shutting down", lib.shutdown_router), True), "danger")])]
+        agh = self.g("agh") or {}
+
+        def links(items):
+            return [("link", label, val, fn) for label, val, fn in items]
+        # Four groups, none longer than four rows (the old list was one run of fifteen): Tools, Connections, Device, Router.
+        rows = [("toggle", "Airplane mode", sim.get("airplane", False), self.toggle_air),
+                ("head", "Tools"),
+                ("tiles", [("Texts", f"{u} unread" if u else "All read", lambda: self.go("texts")),
+                           ("Weather", f"{self.cfg['city']['name']} · {round(wx['now'])}°" if wx else self.cfg["city"]["name"], lambda: self.go("weather"))]),
+                ("tiles", [("Monitor", "Speed test", lambda: self.go("monitor")),
+                           ("Currency", f"{self.cfg['fx']} → {self.cfg['home_fx']}", lambda: self.go("fx"))]),
+                ("head", "Connections")]
+        rows += links([("Clients", f"{sum(1 for c in cl if c['online'])} online", lambda: self.open_set("clients")),
+                       ("Internet", lib.get_wan_conn_type(self.g("cell", {})) or "", lambda: self.open_set("internet")),
+                       ("Network", "Ethernet, IP", lambda: self.open_set("network")),
+                       ("AdGuard Home", "Blocking" if agh.get("enabled") and agh.get("dns") else "On" if agh.get("enabled") else "Off", lambda: self.open_set("agh"))])
+        rows.append(("head", "Device"))
+        rows += links([("Display", self.cfg["bright"], lambda: self.open_set("display")),
+                       ("Security", "Passcode on" if self.cfg["pass_on"] else "No passcode", lambda: self.open_set("security")),
+                       ("Power & USB", (lambda b: f"{b[0]}%" if b else "")(lib.get_battery()), lambda: self.open_set("power")),
+                       ("Dashboard", "Clocks, stock screen", lambda: self.go("dash"))])
+        rows.append(("head", "Router"))
+        rows += links([("Firmware", fw_val, lambda: self.go("firmware")),
+                       ("GL.iNet Account", "", lambda: self.open_set("account")),
+                       ("About device", "GL-E5800", lambda: self.open_set("about"))])
+        rows.append(("btn3", [("Screen off", self.screen_off, ""),
+                              ("Reboot", lambda: self.confirm("Reboot the router?", "Wi-Fi and internet drop for about a minute.", "Reboot",
+                                                              lambda: self.power("Restarting", lib.reboot_router), True), "danger"),
+                              ("Shut down", lambda: self.confirm("Shut down the router?", "Everything goes offline until you press the power button.",
+                                                                 "Shut down", lambda: self.power("Shutting down", lib.shutdown_router), True), "danger")]))
         self.rows(56, 276, rows)
 
     @staticmethod
@@ -2683,6 +2891,7 @@ class App:
             rows += [("value", "Available", f["new"]),
                      ("note", self.fw_note(f.get("note")) or "No release notes were provided."),
                      ("note", f"To install it, use the admin panel at {ip} or switch to the stock screen (More, Dashboard). It downloads, installs and restarts the router.")]
+            rows.append(("link", "Open admin panel", "QR code", self.open_admin_qr))
             if f.get("prompt"):
                 rows.append(("btn", "Skip this version", skip, ""))
         else:
@@ -2691,7 +2900,7 @@ class App:
         self.rows(56, H, rows)
 
     def power(self, label, fn):
-        self.busy = (label, time.time())
+        self.busy, self.busy_hidden, self.busy_can_hide = (label, time.time()), False, False  # reboot / power off: nothing to hide, the screen goes away
         fn()
 
     def screen_off(self):
@@ -2923,24 +3132,24 @@ class App:
         except Exception:
             pass
         per = next((p for p in (1, 100, 1000, 10000) if rate and rate * p >= 1), 1)  # small rates (yen, won) are shown per 100 / 1,000
-        self.card((10, 60, W - 10, 132))
+        self.card((10, 60, W - 10, 140))
         self.t((20, 74), self.fit(f"{per:,} {FX_NAMES.get(code, code)}", F(11), W - 50), F(11), DIM, "lm")
         txt = f"{rate * per:,.2f}" if rate else "--"
         big = F(26, "b") if self.d.textlength(txt, font=F(26, "b")) < 150 else F(20, "b")  # big amounts (rupiah, dong) step down to fit
-        self.t((20, 103), txt, big, FG, "lm")
-        self.t((26 + self.d.textlength(txt, font=big), 106), home, F(13, "b"), DIM, "lm")
+        self.t((20, 102), txt, big, FG, "lm")
+        self.t((26 + self.d.textlength(txt, font=big), 105), home, F(13, "b"), DIM, "lm")
         if rate:
             back = 1 / rate
-            self.t((20, 122), f"1 {home} = {back:,.6f} {code}" if back < 0.01 else f"1 {home} = {back:,.4f} {code}" if back < 100 else f"1 {home} = {back:,.2f} {code}", F(9), DIM, "lm")
+            self.t((20, 128), f"1 {home} = {back:,.6f} {code}" if back < 0.01 else f"1 {home} = {back:,.4f} {code}" if back < 100 else f"1 {home} = {back:,.2f} {code}", F(9), DIM, "lm")
 
-        self.rows(138, H, [("link", "Compare with", code, lambda: self.go("fx_cmp")),
+        self.rows(146, H, [("link", "Compare with", code, lambda: self.go("fx_cmp")),
                            ("link", "My currency", home, lambda: self.go("fx_home"))], "fx_rows")
 
     def fx_list(self, title, current, skip, pick):
         """A list of currencies to choose from: every one we have a name for that the rate list also has (all of them while rates aren't loaded yet)."""
         self.header(title)
         have = (self.g("fx") or {}).get("rates") or {}
-        self.rows(56, H, [("link", f"{c} · {n}", "✓" if c == current else "", lambda c=c: pick(c))
+        self.rows(56, H, [("pick", f"{c} · {n}", c == current, lambda c=c: pick(c))
                           for c, n in FX_NAMES.items() if c != skip and (not have or c in have or c == "USD")])
 
     def v_fx_home(self):
@@ -2964,7 +3173,7 @@ class App:
     def set_accent(self, name, rgb=None):
         self.cfg["accent"] = name
         if rgb is not None:
-            self.cfg["accent_custom"] = list(rgb)
+            self.cfg["accent_custom"] = list(accent_fix(rgb))  # stored as shown, so the list's hex code matches the color on screen
         self.save()
         apply_accent(accent_current(self.cfg))
         self.dirty = True
@@ -2975,8 +3184,8 @@ class App:
         cur, mine = self.cfg["accent"], self.cfg.get("accent_custom")
         rows = [("swatch", n, rgb, cur == n, lambda n=n: self.set_accent(n)) for n, rgb in ACCENTS]
         rows.append(("swatch", "Your color" + (f"  #{''.join(f'{x:02X}' for x in mine)}" if mine else ""), tuple(mine) if mine else None, cur == "custom",
-                     self.open_accent_custom))
-        rows.append(("note", "Very dark colors are lightened so they stay readable on the dark screen."))
+                     self.open_accent_custom, True))
+        rows.append(("note", "Very dark colors are lightened, and orange is nudged away from the amber used for warnings."))
         self.rows(56, H, rows)
 
     def open_accent_custom(self):
@@ -3054,7 +3263,7 @@ class App:
         rows = []
         for n, tz in CLOCKS:
             tm, ap = self.tfmt(tz)
-            rows.append(("link", n, ("✓ " if self.cfg["clock2"][0] == n else "") + f"{tm} {ap}".strip(), lambda n=n, tz=tz: pick(n, tz)))
+            rows.append(("pick", n, self.cfg["clock2"][0] == n, lambda n=n, tz=tz: pick(n, tz), f"{tm} {ap}".strip()))
         self.rows(56, H, rows)
 
     # ---- settings sections ----
@@ -3108,7 +3317,7 @@ class App:
                         "Anything plugged in disconnects briefly."
                     self.confirm(f"Use the Ethernet port as {m.upper()}?", body, "Switch", lambda: self.work("Switching Ethernet port", lambda: set_eth_mode(m), ("ports",)))
                 rows += [("head", "Ethernet port"),
-                         ("seg", "Use the port for", ["WAN · internet in", "LAN · devices"], "WAN · internet in" if cur == "wan" else "LAN · devices", eth),
+                         ("seg", "Use the port for", ["WAN · internet", "LAN · devices"], "WAN · internet" if cur == "wan" else "LAN · devices", eth),
                          ("value", "Cable", "Connected" if lib.ubus_call("network.interface.wan", "status").get("up") else "Not connected")]
             rows += [("head", "Router"), ("value", "Router IP address", ip),
                      ("note", f"IP address, DHCP and VLAN settings are in the admin panel at {ip}.")]
@@ -3224,7 +3433,7 @@ class App:
             return "About device", [("value", "Model", read("/tmp/sysinfo/model", "GL-E5800").split(",")[0]),
                                     ("value", "Firmware", read("/etc/glversion")), ("value", "Modem", f"{modem.get('vendor', '')} {modem.get('name', '')}".strip()),
                                     ("value", "CPU temperature", f"{t:.0f}°C" if t else "—"), ("value", "Uptime", f"{up // 60} h {up % 60} m"),
-                                    ("value", "Admin panel", lib.get_system_info().get("lan_ip", ""))]
+                                    ("link", "Admin panel", lib.get_system_info().get("lan_ip", ""), self.open_admin_qr)]
         return key, []
 
     def open_pick(self, title, opts, cur, fn):
@@ -3239,7 +3448,7 @@ class App:
             self.back()
             if str(v) != str(cur):
                 fn(v)
-        self.rows(56, H, [("link", l, "✓" if str(v) == str(cur) else "", lambda v=v: choose(v)) for v, l in opts])
+        self.rows(56, H, [("pick", l, str(v) == str(cur), lambda v=v: choose(v)) for v, l in opts])
 
     def v_set(self):
         title, rows = self.set_rows(self.sel.get("set", "about"))
@@ -3424,7 +3633,7 @@ class App:
         mobile = "Airplane mode" if sim.get("airplane") else f"{name} · {tech or 'on'}" if self.data_on() else f"{name} · data off"
         wga = self.g("wga")
         agh = self.g("agh") or {}
-        rows = [("Internet", internet), ("Mobile", mobile), ("VPN", vpn_label(self.peer_name(wga)) if wga else "Off"),
+        rows = [("Internet", internet), ("Mobile", mobile), ("VPN", self.vpn_text(wga)),
                 ("AdGuard", "Blocking ads" if agh.get("enabled") and agh.get("dns") else "On, not blocking" if agh.get("enabled") else "Off")]
         box = (12, y0, W - 12, y0 + 10 + 20 * len(rows))
         region = self.img.crop(box)
@@ -3435,10 +3644,11 @@ class App:
             y = y0 + 15 + i * 20
             self.t((22, y), k, F(10), DIM, "lm")
             on = v not in ("Off", "Offline") and "data off" not in v
-            self.t((W - 22, y), self.fit(v, F(10, "s"), 135), F(10, "s"), FG if on else DIM, "rm")
+            room = W - 44 - self.d.textlength(k, font=F(10)) - 12  # each row's value gets what its own label leaves (VPN has the most)
+            self.t((W - 22, y), self.fit(v, F(10, "s"), room), F(10, "s"), FG if on else DIM, "rm")
 
     def v_lock(self):
-        wall = wallpaper(self.cfg["wallpaper"], 0.35)
+        wall = wallpaper(self.cfg["wallpaper"], 0.35, 0.75)
         if wall:
             self.img.paste(wall)
         else:
@@ -3532,14 +3742,41 @@ class App:
                     fn()
             self.btn((x0, y, x0 + bw, y + 38), act)
 
+    BUSY_HINTS = (("Switching to", "Up to a minute"), ("Applying", "Usually 10-45 s"), ("Turning Tailscale", "About 5 s"))  # only where measured or stated in the sheet copy
+
+    def busy_modal(self):
+        """A job is running and its full-screen overlay is up (False once the user has hidden it)."""
+        return bool(self.busy) and not self.busy_hidden
+
+    def hide_busy(self):
+        self.busy_hidden = True
+        self.dirty = True
+
     def v_busy(self):
-        label, _ = self.busy
+        label, t0 = self.busy
+        if self.busy_hidden:  # running in the background: just a small pill above the tab bar
+            txt = self.fit(label + "…", F(10, "s"), 190)
+            pw = int(self.d.textlength(txt, font=F(10, "s"))) + 44
+            x0 = (W - pw) // 2
+            self.d.rounded_rectangle((x0, 246, x0 + pw, 270), radius=12, fill=SURF, outline=EDGE)
+            self.spinner(x0 + 16, 258, 6)
+            self.t((x0 + 30, 258), txt, F(10, "s"), FG, "lm")
+            return
         self.img.paste(Image.blend(self.img, Image.new("RGB", (W, H), BG), 0.94))
         self.d = ImageDraw.Draw(self.img)
-        self.spinner(W / 2, 130, 14)
-        for i, line in enumerate(wrap(self.d, label, F(13, "b"), W - 40)[:2]):
-            self.t((W / 2, 166 + i * 18), line, F(13, "b"), FG, "mm")
+        self.spinner(W / 2, 112, 14)
+        lines = wrap(self.d, label, F(13, "b"), W - 40)[:2]
+        for i, line in enumerate(lines):
+            self.t((W / 2, 148 + i * 18), line, F(13, "b"), FG, "mm")
+        hint = next((h for p, h in self.BUSY_HINTS if label.startswith(p)), "")
+        secs = int(time.time() - t0)
+        self.t((W / 2, 148 + len(lines) * 18 + 6), (hint + " · " if hint else "") + f"{secs} s so far", F(10), DIM, "mm")
         self.hits = []
+        if self.busy_can_hide:
+            self.d.rounded_rectangle((W / 2 - 52, 226, W / 2 + 52, 262), radius=10, outline=(57, 66, 79))
+            self.t((W / 2, 244), "Hide", F(12, "b"), FG, "mm")
+            self.t((W / 2, 280), "It keeps working in the background.", F(10), DIM, "mm")
+            self.btn((W / 2 - 52, 226, W / 2 + 52, 262), self.hide_busy)
 
     # ---- swipe-down quick panel ----
     PANEL_H = 242
@@ -3606,24 +3843,24 @@ class App:
         tiles = [
             ("Data", self.data_on(), "On" if self.data_on() else "Off", self.toggle_data, False),
             ("Wi-Fi", wifi_on, "Working…" if wifi_busy else "On" if wifi_on else "Off", self.panel_wifi_toggle, False),
-            ("VPN", bool(self.g("wga")), "On" if self.g("wga") else "Off", self.panel_vpn_toggle, False),
+            ("VPN", bool(self.g("wga")), "WireGuard" if self.g("wga") else "Off", self.panel_vpn_toggle, False),
             ("Ad block", blocking, "Blocking" if blocking else "Off" if agh else "Loading", agh_toggle, False),
             ("Airplane", air, "On" if air else "Off", self.toggle_air, False),
-            ("Network", bool(rep.get("connected")), self.fit(rep.get("ssid") or "Not joined", F(8), 58), lambda: self.tab("wifi"), False),
+            ("Network", bool(rep.get("connected")), self.fit(rep.get("ssid") or "Not joined", F(8), 68), lambda: self.tab("wifi"), False),
             ("Screen off", False, "Sleep", self.screen_off, False),
             ("Reboot", False, "", reboot, True),
             ("Shut down", False, "", shutdown, True),
         ]
-        tw, th, gap = 70, 46, 6
+        tw, th, gap = 72, 46, 4
         for i, (label, on, sub, fn, danger) in enumerate(tiles):
             r, c = divmod(i, 3)
-            x0, y0 = 12 + c * (tw + gap), 28 + r * (th + gap)
+            x0, y0 = 8 + c * (tw + gap), 28 + r * (th + gap)
             self.card((x0, y0, x0 + tw, y0 + th), fill=TEALBG if on else SURF, edge=REDLINE if danger else TEAL2 if on else EDGE, r=10)
             if sub:
-                self.t((x0 + tw / 2, y0 + 17), self.fit(label, F(10, "b"), tw - 8), F(10, "b"), TEAL if on else FG, "mm")
+                self.t((x0 + tw / 2, y0 + 17), self.fit(label, F(10, "b"), tw - 4), F(10, "b"), TEAL if on else FG, "mm")
                 self.t((x0 + tw / 2, y0 + 33), sub, F(8), DIM, "mm")
             else:
-                self.t((x0 + tw / 2, y0 + th / 2), self.fit(label, F(8, "b"), tw - 6), F(8, "b"), RED if danger else FG, "mm")
+                self.t((x0 + tw / 2, y0 + th / 2), self.fit(label, F(8, "b"), tw - 4), F(8, "b"), RED if danger else FG, "mm")
             self.btn((x0, y0, x0 + tw, y0 + th), lambda fn=fn: (self.close_panel(), fn()))
         cur = self.cfg["bright"]
         by = 28 + 3 * (th + gap) + 2
@@ -3654,7 +3891,7 @@ class App:
             self.v_lock()
         else:
             if self.view == "home" and self.cfg["wall_on"] == "Lock + Home":
-                wall = wallpaper(self.cfg["wallpaper"], 0.55)
+                wall = wallpaper(self.cfg["wallpaper"], 0.55, 0.75)
                 if wall:
                     self.img.paste(wall)
             shift = TOP if self.view != "home" else 0  # Home already lays out its own gap
@@ -3707,7 +3944,7 @@ class App:
             ts.release_pending = False
         if active:
             self.last_touch = now
-            blocked = self.busy or self.sheet or self.locked
+            blocked = self.busy_modal() or self.sheet or self.locked
             if not blocked and not self.panel_open and y < 28 and dy > 6:  # pull down from the status bar
                 self.panel_drag = min(self.PANEL_H, max(0, dy))
                 self.dirty = True
@@ -3716,15 +3953,15 @@ class App:
                 self.dirty = True
             if self.panel_drag is not None:
                 pass
-            elif self.scroll_area and abs(dy) > 8 and not self.busy and not self.sheet and not self.locked:
+            elif self.scroll_area and abs(dy) > 8 and not self.busy_modal() and not self.sheet and not self.locked:
                 key, y0, y1, maxoff = self.scroll_area
                 if maxoff and y0 <= y <= y1:
                     self.drag_key, self.drag_dy = key, dy
                     self.dirty = True
         if rel:
             self.last_touch = now
-            if self.busy:
-                pass
+            if self.busy_modal() and not self.busy_can_hide:
+                pass  # (a hideable job's overlay still takes the tap: its only hit is the Hide button)
             elif self.panel_drag is not None:
                 self.panel_open = self.panel_drag > self.PANEL_H * 0.4
                 self.panel_drag = None
@@ -3843,6 +4080,11 @@ def preview(outdir):
         shots.append((name, app.render().copy()))
     shot("home", "home")
     shot("sim", "sim")
+    app.scroll["sim_rows"] = 80
+    shot("sim_mid", "sim")
+    app.scroll["sim_rows"] = 999
+    shot("sim_end", "sim")
+    app.scroll["sim_rows"] = 0
     shot("sim_detail", "sim_detail")
     real_sims = app.g("sims") or {}
     app.r.put("sims", dict(real_sims, locks={"1": {"status": 3, "pin_counter": 2}, "2": {"status": 6, "pin_counter": None}}))  # example: preview only
@@ -3863,11 +4105,66 @@ def preview(outdir):
     shot("sim_info_2", "sim_info")
     app.scroll["sim_info"] = 0
     shot("sim_detail_link", "sim_detail")
+    # step 4 (dead ends and waits): example states, preview only
+    shot("admin_qr", "admin_qr")
+    app.sel["tslogin"] = {"state": "loading", "url": ""}
+    shot("ts_login_loading", "ts_login")
+    app.sel["tslogin"] = {"state": "ok", "url": "https://login.tailscale.com/a/example123456"}  # invented link
+    shot("ts_login_ok", "ts_login")
+    app.sel["tslogin"] = {"state": "error", "url": ""}
+    shot("ts_login_error", "ts_login")
+    real_ts4 = app.g("ts")
+    app.r.put("ts", {"enabled": True, "config": {}, "status": 1, "ip": ""})
+    shot("vpn_ts_signin", "vpn")
+    app.r.put("ts", real_ts4 if real_ts4 is not None else {"enabled": False, "config": {}, "status": None, "ip": ""})
+    app.busy, app.busy_can_hide, app.busy_hidden = ("Switching to DITO", time.time() - 14), True, False
+    shot("busy_hint", "sim")
+    app.busy_hidden = True
+    shot("busy_hidden_pill", "sim")
+    app.busy, app.busy_can_hide, app.busy_hidden = ("Applying", time.time() - 31), True, False
+    shot("busy_apply", "sim")
+    app.busy, app.busy_can_hide, app.busy_hidden = None, False, False
     shot("accent", "accent")
     app.set_accent("custom", (255, 140, 66))  # example custom color, preview only
     shot("accent_custom_set", "accent")
     app.open_accent_custom()
     shot("accent_custom", "accent_custom")
+    keep = (app.cfg["two_clocks"], app.cfg["sig"])
+    app.cfg["two_clocks"], app.cfg["sig"] = True, "Example signature here!"  # the case that was clipped: second clock on + a signature
+    shot("home_sig_two_clocks", "home")
+    app.cfg["two_clocks"], app.cfg["sig"] = keep
+    app.cfg["accent"], app.cfg["accent_custom"] = "Teal", None  # the real default, so these shots show the shipped look
+    apply_accent(accent_current(app.cfg))
+    real_conn, real_sig, real_rep = lib.get_wan_conn_type, lib.get_cell_signal, app.g("rep")
+    lib.get_wan_conn_type = lambda c=None: "Repeater"
+    app.r.put("rep", {"connected": True, "ssid": "Space Rice", "signal": -48, "ip": None, "band": "5G"})  # example network, preview only
+    shot("home_up_wifi", "home")
+    app.r.put("rep", {"connected": True, "ssid": "A very long hotel network name", "signal": -80, "ip": None, "band": "2G"})
+    shot("home_up_wifi_weak_long", "home")
+    lib.get_wan_conn_type = lambda c=None: "4G"
+    lib.get_cell_signal = lambda c=None: (3, "4G")
+    shot("home_up_mobile", "home")
+    app.data_on = lambda: True  # mobile data on: shows the usage line and bar
+    lib.get_cell_signal = lambda c=None: (3, "4G")
+    shot("home_up_mobile_data_on", "home")
+    lib.get_wan_conn_type = lambda c=None: "Repeater"
+    shot("home_up_wifi_data_on", "home")
+    lib.get_wan_conn_type = lambda c=None: "4G"
+    del app.data_on
+    lib.get_cell_signal = lambda c=None: (1, "4G")
+    shot("home_up_mobile_weak", "home")
+    lib.get_wan_conn_type = lambda c=None: "Ethernet"
+    shot("home_up_ethernet", "home")
+    lib.get_wan_conn_type = lambda c=None: None
+    shot("home_up_offline", "home")
+    app.cfg["sig"] = "my network"
+    app.cfg["two_clocks"] = True
+    lib.get_wan_conn_type = lambda c=None: "Repeater"
+    app.r.put("rep", {"connected": True, "ssid": "Space Rice", "signal": -48, "ip": None, "band": "5G"})
+    shot("home_up_full", "home")  # worst case: second clock + signature
+    app.cfg["two_clocks"], app.cfg["sig"] = keep
+    lib.get_wan_conn_type, lib.get_cell_signal = real_conn, real_sig
+    app.r.put("rep", real_rep if real_rep is not None else {"connected": False, "ssid": None, "signal": None, "ip": None})
     app.cfg["accent"] = "Blue"
     apply_accent(accent_current(app.cfg))
     shot("home_blue", "home")
@@ -3884,11 +4181,13 @@ def preview(outdir):
     if st:
         app.sel["bands"] = {"slot": st["slot"], "enable": True, "mode": "AUTO", "list": {"NR-SA": [78, 77], "NR-NSA": [78, 77, 41], "LTE": [1, 3, 8, 41]}}  # example choice, preview only
         shot("bands_on", "bands")
+        shot("bands_pick_on", "bands_pick")
         app.scroll["bands"] = 400
         shot("bands_on_2", "bands")
         app.scroll["bands"] = 0
         app.sel["bands"] = {"slot": st["slot"], "enable": True, "mode": "NR5G", "list": {"NR-SA": [], "NR-NSA": [], "LTE": []}}
         shot("bands_warn", "bands")
+        shot("bands_pick_warn", "bands_pick")
         app.sel.pop("bands", None)
     real_slot2 = (app.g("sims") or {}).get("slot2_type")
     app.r.put("sims", dict(app.g("sims") or {}, slot2_type=1))
@@ -3939,10 +4238,21 @@ def preview(outdir):
     app.sel["saved_ssid"] = (app.g("rep") or {}).get("ssid") or "Space Rice"
     shot("saved_net", "saved_net")
     shot("vpn", "vpn")
+    real_ts = app.g("ts")
+    for name, st in (("off", {"enabled": False, "config": {}, "status": None, "ip": ""}),  # example states, preview only
+                     ("connected", {"enabled": True, "config": {}, "status": 3, "ip": "100.101.202.233"}),
+                     ("login", {"enabled": True, "config": {}, "status": 1, "ip": ""})):
+        app.r.put("ts", st)
+        shot("vpn_ts_" + name, "vpn")
+    app.r.put("ts", real_ts if real_ts is not None else {"enabled": False, "config": {}, "status": None, "ip": ""})
     shot("vpn_loc", "vpn_loc")
     shot("vpn_opts", "vpn_opts")
     shot("more", "more")
-    app.scroll["more"] = 400
+    app.scroll["more"] = 230
+    shot("more_mid", "more")
+    app.scroll["more"] = 460
+    shot("more_mid2", "more")
+    app.scroll["more"] = 900
     shot("more_bottom", "more")
     shot("texts", "texts")
     from datetime import datetime as _dt
@@ -3999,6 +4309,23 @@ def preview(outdir):
     app.cfg["wall_on"] = "Lock screen"
     app.cfg["wake"] = "Status"
     shot("lock_status", locked=True)
+    # VPN status in every place it shows: WireGuard and Tailscale, all four combinations (example states, preview only)
+    peers = app.g("wgp") or []
+    real_wga, real_ts = app.g("wga"), app.g("ts")
+    for tag, wg_on, ts_on in (("none", False, False), ("wg", True, False), ("ts", False, True), ("both", True, True)):
+        app.r.put("wga", peers[0]["id"] if (wg_on and peers) else None)
+        app.r.put("ts", {"enabled": ts_on, "config": {}, "status": 3 if ts_on else None, "ip": "100.101.202.233" if ts_on else ""})
+        app.cfg["wake"] = "Status"
+        shot("vpnst_lock_" + tag, locked=True)
+        app.locked, app.lock_stage = False, "face"
+        shot("vpnst_home_" + tag, "home")
+        shot("vpnst_vpn_" + tag, "vpn")
+        app.panel_open, app.panel_drag = True, None
+        shot("vpnst_panel_" + tag, "home")
+        app.panel_open = False
+    app.r.put("wga", real_wga)
+    app.r.put("ts", real_ts if real_ts is not None else {"enabled": False, "config": {}, "status": None, "ip": ""})
+    app.locked, app.lock_stage = True, "face"
     app.lock_stage, app.uerr = "pad", "Wrong passcode · 3 tries left"
     shot("lock_pad", locked=True)
     app.locked, app.lock_stage = False, "face"

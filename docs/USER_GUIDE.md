@@ -10,7 +10,7 @@ How to use the touchscreen on the GL.iNet GL-E5800 (router `10.10.1.1`) with the
 - **Lists that run off the screen** scroll: drag up or down. A thin bar on the right shows your position.
 - **Changes that can cut a connection** (switching SIM, turning something off, blocking a device,
   rebooting) ask you to confirm first.
-- **Slow changes** show a spinner. Wi-Fi changes run in the background instead: the switch turns into a
+- **Slow changes** (switching SIM, applying band settings, connecting the VPN) show a full-screen spinner with the job's name and how many seconds it has run, plus an estimate where there is one (*Up to a minute* for a SIM switch, *Usually 10-45 s* for network and band settings, *About 5 s* for Tailscale). **Hide** puts the job in the background: a small pill above the tab bar shows it until it finishes, and you can keep using the screen (another change waits with "Still working"). Reboot and Power off can't be hidden. Wi-Fi changes run in the background instead: the switch turns into a
   small spinning circle and a short message pops up when the router has finished.
 
 ## Quick panel
@@ -18,7 +18,7 @@ How to use the touchscreen on the GL.iNet GL-E5800 (router `10.10.1.1`) with the
 Drag down from the very top (the status bar) to pull down the quick panel; the screen dims behind it.
 
 - **Tiles:** *Data* (mobile data on or off), *Wi-Fi* (turns the router's own Wi-Fi on or off: both bands, asks
-  first when turning off, and remembers which bands to bring back), *VPN* (the tunnel's switch from the VPN tab; if no location is chosen yet it opens the location list), *Ad block* (start
+  first when turning off, and remembers which bands to bring back), *VPN* (the WireGuard tunnel's switch from the VPN tab, shown as *WireGuard* when on; if no location is chosen yet it opens the location list), *Ad block* (start
   or stop AdGuard Home blocking; asks first because DNS restarts), *Airplane*, *Network* (shows the Wi-Fi network
   the router is joined to; opens the Wi-Fi tab) and *Screen off*. A lit tile is on.
 - **Reboot** and **Shut down** (red outline): both ask you to confirm first.
@@ -36,7 +36,7 @@ The top row of every screen shows:
 | Icon | Means |
 |---|---|
 | Lock | A screen passcode is set |
-| Shield (teal) | VPN connected |
+| Shield (teal) | A VPN service is connected: the WireGuard tunnel, Tailscale, or both |
 | ⊘ | AdGuard Home is blocking ads and trackers |
 | Wi-Fi | Internet is coming from a Wi-Fi network (repeater) |
 | ↑↓ arrows | Mobile data is on |
@@ -51,20 +51,23 @@ The lock screen appears whenever the screen wakes up.
 - **With a passcode set**: swiping up shows a number pad. After 5 wrong tries it locks for 30 seconds.
 - **What it shows**: either a big clock (time, date, your signature) or a status view (data used,
   devices online, speed). Choose under More → Display → *When the screen wakes, show*.
-- Small labels at the bottom show unread texts, VPN status and the current weather.
+- Small labels at the bottom show unread texts, VPN status and the current weather. The status view's VPN line says what is up: *Off*, the WireGuard server (*Philippines · Manila*), *Tailscale on*, or *Philippines + Tailscale* when both are.
 
 ## Home
 
 - **Time and date** for Manila, plus a second city if you've turned on two clocks. Your signature, if
-  set, appears under the date.
+  set, appears in teal in the strip just above the tab bar (it used to sit under the date and was cut off by the SIM card when the second clock was on).
 - **Weather** (top right): tap it for the forecast.
-- **SIM card**: the SIM in use, data used this month against your cap, and where internet is coming
-  from right now (*Repeater*, *4G*, *5G*…). Shows "data off" when mobile data is off. Tap it to open SIM.
-- **Devices**: how many devices are online. Tap for the Clients list.
-- **Speed**: live download and upload. Tap for Monitor.
-- **VPN** and **Texts**: tap to open them. Texts shows how many are unread.
+- **Connection card** (the first card): answers "am I online, and through what?". The big line is the connection in use: the Wi-Fi network name (when the repeater is the
+  uplink), the carrier name (mobile), *Ethernet*, or *Offline* in amber. The chip beside it gives the type and strength: *Wi-Fi · Strong / Fair / Weak* (from the Wi-Fi signal),
+  *4G · Strong…* (from the modem's bars), or *Wired*. The second line is the SIM in use: *data off*, or the data used this month (with a bar when you've set a cap).
+  Tap it to open the Wi-Fi tab (repeater), the SIM tab (mobile) or the Internet settings (Ethernet or offline). Long Wi-Fi names are shortened here; the full name is on the Wi-Fi tab.
+- **Four tiles** in a grid, each a small label over a value: **Devices** (how many are online; tap for Clients), **Speed** (live download and upload in Mbps; tap for Monitor),
+  **VPN** (*Off*; the country of the WireGuard server; *Tailscale* when only Tailscale is connected; or *2 connected* when both are; connected states are in your accent color; tap for the VPN tab, which has the detail) and **Texts** (*All read*, or *N new* in amber; tap to open).
 
-## SIM (Mobile)
+## SIM (the "SIM & data" page)
+
+The SIM tab opens a page titled **SIM & data**.
 
 - **Mobile data** (top): turns mobile internet on or off. Texts and calls keep working when it's off.
 - **SIM cards**: **SIM1** (physical), **SIM2** (physical) and **eSIM**. SIM2 and the eSIM share slot 2,
@@ -74,8 +77,8 @@ The lock screen appears whenever the screen wakes up.
     IP address, gateway, DNS, the cell's band, ID, TAC, PCI, ARFCN and signal levels, and the modem's model, firmware and IMEI) and to set its **monthly data cap**
     (No cap, 5–100 GB). The cap is only for the usage bar; it never cuts data off.
   - **Network & bands** (same page, under Details & info): the stock admin panel's **Network type** (Auto, 5G or 4G) and **Band masking** for the SIM in use.
-    Switch Band masking on and tick the bands the modem may use, in groups (5G NR SA, 5G NR NSA, 4G LTE; **All** / **None** per group). A yellow
-    "pick one" flag means that group would leave no usable network; **Apply** stays off until it's fixed. Nothing changes until you tap Apply and confirm; mobile
+    Switch Band masking on and an **Allowed bands** row appears (for example "9 of 43", or "Pick at least one"). Tap it for the band chips, in groups (5G NR SA, 5G NR NSA, 4G LTE; **All** / **None** per group); a yellow
+    "pick one" flag means that group would leave no usable network. Go back to the page before to **Apply**, which stays off until the selection is usable. Nothing changes until you tap Apply and confirm; mobile
     data reconnects and devices may lose internet while it does (a band change was seamless in testing; switching network type took about 25 seconds). To undo: switch Band masking off (and set Auto) and apply. If you end up with no signal, the
     stock admin panel (SIM details, Settings) shows the same switch. Lock operator and Lock tower are only in the admin panel.
   - Tap another SIM to switch to it. Mobile internet pauses for up to a minute while the modem
@@ -94,7 +97,9 @@ The lock screen appears whenever the screen wakes up.
 
 ## Wi-Fi
 
-- **Internet from Wi-Fi**: the network the router is using for internet (repeater mode).
+The **Main / Guest** switch stays at the top; everything under it scrolls.
+
+- **Internet from Wi-Fi** (first card on the Main list): the network the router is using for internet (repeater mode).
   - **Change** / **Join** lists nearby networks with their signal strength and a band tag after the
     name: **2.4 GHz**, **5 GHz**, or **2.4/5 GHz** when the network is on both. Open and saved networks join
     straight away; others ask for the password on the on-screen keyboard (at least 8 characters).
@@ -148,7 +153,7 @@ The lock screen appears whenever the screen wakes up.
 Works like the VPN Dashboard in the stock screen and admin panel: one tunnel with a switch, a server and settings.
 
 - **Big round button** (the tunnel's "Use" switch): connects or disconnects. It keeps the chosen server when you
-  switch off. When it's on, all devices go through the VPN. The quick-panel VPN tile is the same switch.
+  switch off. When it's on, all devices go through the VPN. The quick-panel VPN tile is the same switch. The line under the button names it (*WireGuard is on / off*) so it can't be confused with the separate Tailscale card below.
 - **Location** (the tunnel's "Via"): pick a WireGuard server (for example "United States · Seattle"). If the VPN is
   on, it reconnects to the new server. With no tunnel yet, choosing a location creates one, switched off; then use
   the switch.
@@ -156,11 +161,14 @@ Works like the VPN Dashboard in the stock screen and admin panel: one tunnel wit
   **IP masquerading** and **Services use VPN** (GL.iNet's own services). Changing one restarts the VPN for a few
   seconds. The MTU and which devices use the tunnel are set in the admin panel.
 - Servers are the WireGuard configs saved on the router. Add new ones in the admin panel.
+- **Tailscale** (bottom card, its own switch, separate from the WireGuard button above): the stock "Tailscale" on/off. The line under the name shows the state: **Off**,
+  **Connecting…**, **Connected** (a green chip beside the name, and the Tailscale address on the line below), **Tap to sign in (QR code)** (the service is on but this router isn't linked to a Tailscale account yet: tap the card, not the switch, and a QR code of the sign-in link appears; scan it with your phone and sign in; if the link can't be fetched you get *Try again* and the admin-panel QR) or **Needs your approval**. Switching it on keeps whatever exit node and sharing options you saved in the admin panel. The card only
+  appears once the router answers.
 - If the router refuses a change, or connects to a different server than the one chosen, the screen says so.
 
 ## More
 
-At the top: **Airplane mode** (stops mobile data, texts and calls; Wi-Fi keeps working).
+At the top: **Airplane mode** (stops mobile data, texts and calls; Wi-Fi keeps working). The rest is in four labeled groups of four rows or fewer: **Tools** (Texts, Weather, Monitor, Currency), **Connections** (Clients, Internet, Network, AdGuard Home), **Device** (Display, Security, Power & USB, Dashboard) and **Router** (Firmware, GL.iNet Account, About device), then Screen off, Reboot and Shut down.
 
 ### Tools
 
@@ -178,7 +186,7 @@ At the top: **Airplane mode** (stops mobile data, texts and calls; Wi-Fi keeps w
   same list of about 30 currencies; pick one and the page and the More tile follow. The main currency is left out of the Compare list so it never
   compares with itself, and changing the main currency to the one you were comparing swaps the comparison to PHP (or USD). Small rates (yen, won) are shown per 100 or 1,000. Rates come from open.er-api.com and refresh every few hours.
 
-### Router settings
+### Router settings (the rows under Connections, Device and Router)
 
 - **Clients**: every known device, online first, with its data used. Tap one for its details and
   **Block this device** / **Unblock this device**. A blocked device can't use the main or guest Wi-Fi.
@@ -204,8 +212,8 @@ At the top: **Airplane mode** (stops mobile data, texts and calls; Wi-Fi keeps w
 - **Firmware**: the installed version and whether a newer one is available (the router's own update check, like the stock
   screen). With an update, you see the version and a short release note, and **Skip this version** stops the prompt. An orange dot on
   More means the router is prompting for an update. **Check again** asks the router now. To install, use the admin panel or the stock
-  screen: this screen doesn't install firmware.
-- **About device**: model, firmware, modem, CPU temperature, uptime and the admin panel address.
+  screen: this screen doesn't install firmware. **Open admin panel** (shown with an update) gives a QR code of the admin panel's address, so a phone on the router's Wi-Fi can finish the install.
+- **About device**: model, firmware, modem, CPU temperature, uptime and the admin panel address. Tap **Admin panel** for a QR code of it (scan with a phone on the router's Wi-Fi, then sign in with your router password). This is the way to finish anything this screen says to do in the admin panel.
 
 At the bottom: **Screen off**, **Reboot** and **Shut down**.
 
@@ -238,5 +246,5 @@ If the custom UI ever crashes three times in a row, the router switches to the s
 
 More → Display → **Accent color** changes the color used for the tab highlight, switches, buttons, progress bars, chips and the check marks. Pick one of five ready-made
 colors (Teal is the original, then Blue, Purple, Pink, Lime) or **Your color**: tap a hue, tap how strong it should be, or choose **Type a hex code** (six digits,
-0-9 and A-F, for example 4FD1B5), then **Use this color**. Very dark colors are lightened so they stay readable on the dark screen, and the text on filled buttons
-switches between dark and white to stay readable. It applies at once and is remembered. Warning orange and the red for delete / danger don't change.
+0-9 and A-F, for example 4FD1B5), then **Use this color**. Very dark colors are lightened so they stay readable on the dark screen, strong oranges and ambers are nudged to the nearest red-orange or yellow so an accent can never pass for a warning, and the text on filled buttons
+switches between dark and white to stay readable. It applies at once and is remembered. Warning amber and the red for delete / danger don't change. Every list where you choose one item (currency, VPN location, second clock, data cap, idle timeout, accent) marks the current choice with a ✓ and nothing else.

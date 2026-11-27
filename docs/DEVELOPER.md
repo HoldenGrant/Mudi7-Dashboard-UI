@@ -60,6 +60,7 @@ On the router (`/root/e5ui`):
    | `bands` | `lib.get_band_state` (`modem.get_band_config` + `cellular.modem info` for the supported bands) | 120 s, requested on open |
    | `sms` / `smssent` | `lib.get_sms_messages` (smstools spool) / `lib.get_sent_sms` (`modem.get_sms_list`) | 20 s / 30 s |
    | `wgp` / `wga` | WireGuard peers / active peer | 300 s / 20 s |
+   | `ts` | `lib.get_tailscale` (`tailscale.get_config`, plus `get_status` while enabled) | 30 s |
    | `wx` / `aq` | Open-Meteo forecast / air quality | 30 min |
    | `fx` | `lib.fetch_fx` (open.er-api.com, base USD, cached 6 h) | 1 h |
    | `clients` / `acl` | `gl-clients list` / block list | 20 s / 60 s |
@@ -89,6 +90,9 @@ On the router (`/root/e5ui`):
    | One or two tiles | `("tiles", [(title, subtitle, fn), (…)])` |
 
    | Message | `("msg", from, preview, tag, unread, fn)` |
+   | Choose-one list item | `("pick", label, selected, fn[, detail])` (✓ on the chosen one, no chevron; `detail` is dim text before the ✓, e.g. a clock time) |
+   | SIM card (SIM page) | `("simcard", draw(y) -> tap action)`, 41 px tall; the callback draws on the scrolling layer |
+   | Wi-Fi uplink card (Main list) | `("upcard", draw(y) -> tap action)`, 62 px |
    | Band chips | `("bands", label, supported, picked, prefix, flip(b), flip_all, warn)` |
 
    The settings sections under More → Router settings live in `set_rows(key)`; add a section there and a
@@ -100,7 +104,7 @@ On the router (`/root/e5ui`):
      (`wifi_lock`), and show a spinner in the row (`self.pending`).
    - `self.say(text)` shows a 3-second message.
 7. **Text and fonts**: `F(size, weight)` loads the stock fonts from `/etc/gl_screen/language/ttf`
-   (`m`, `s`, `b`, `mono`). Sizes ≤ 16 are drawn `FONT_BUMP` (2) px larger. Those fonts lack ⌫/⇧, so the
+   (`m`, `s`, `b`, `mono`). Sizes ≤ 16 are drawn `FONT_BUMP` (3) px larger, and nothing is drawn smaller than `MIN_PX` (13 px; `F()` enforces it, so `F(8)` and `F(9)` are 13 px too). Those fonts lack ⌫/⇧, so the
    keyboard says "Del"/"aA".
 8. **Framebuffer**: `to565()` converts with Pillow channel ops and writes to `/dev/fb0` (byte-identical to
    the plugin's numpy version and about as fast). `_safe_rr` patches Pillow 9.5's `rounded_rectangle`, which
@@ -201,6 +205,8 @@ Conventions:
   poll (`lib._wait_until`) rather than trusting the call's return.
 - **Read-only probing on the live router is fine; changing settings there isn't** without asking: SIM
   switching drops mobile data, and blocking the wrong client cuts off SSH.
+- Long jobs: `work()` runs one job at a time (a second says "Still working"); `busy_modal()` is true while the overlay is up; `busy_can_hide` is set for `work()` jobs and not for `power()`; `BUSY_HINTS` carries estimates only where measured. QR pages (`draw_qr`, `v_admin_qr`, `v_ts_login`) leave a 4-module quiet zone when modules stay >= 3 px.
+- Chips are 17 px tall; note rows use a 16 px line height; the wallpaper takes a `scrim` (an eased black gradient over the top 130 px, strength 0.75 on Home and lock) so the date and weather stay readable over the bright planet edge.
 - Check layouts at the bumped font sizes; `fit()` truncates with "…" rather than overflowing.
 
 ## Fresh install

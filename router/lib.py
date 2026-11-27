@@ -855,6 +855,39 @@ def get_sim_details():
     }
 
 
+def get_tailscale():
+    """The stock "Tailscale" switch (VPN dashboard): tailscale.get_config {} -> {enabled, wan_enabled, lan_enabled, exit_node_ip, run_exit_node, masq, lan_ip}
+    and, only while it's enabled, tailscale.get_status {} -> {status: 1 not signed in, 2 needs approval, 3 connected, 4 connecting, login_name, address_v4, dns}.
+    Returns {"enabled", "config", "status", "ip"}. The account name is deliberately not kept. Raises if the router won't answer, so the screen keeps the last answer."""
+    ok, cfg = gl_call("tailscale", "get_config", {}, timeout=20)
+    if not ok or not isinstance(cfg, dict) or "enabled" not in cfg:
+        raise RuntimeError("tailscale get_config failed")
+    status, ip = None, ""
+    if cfg.get("enabled"):
+        ok, st = gl_call("tailscale", "get_status", {}, timeout=20)
+        if ok and isinstance(st, dict):
+            status, ip = st.get("status"), st.get("address_v4") or ""
+    return {"enabled": bool(cfg.get("enabled")), "config": cfg, "status": status, "ip": ip}
+
+
+def set_tailscale_enabled(on, cfg):
+    """What the stock Apply sends: off = {enabled: false}; on = {enabled: true, exit_node_ip, run_exit_node, wan_enabled, lan_enabled, masq} with the saved
+    values, so the exit node and sharing options you set in the admin panel are kept."""
+    params = {"enabled": False}
+    if on:
+        params = {"enabled": True, "exit_node_ip": cfg.get("exit_node_ip") or "", "run_exit_node": bool(cfg.get("run_exit_node")),
+                  "wan_enabled": bool(cfg.get("wan_enabled")), "lan_enabled": bool(cfg.get("lan_enabled")), "masq": bool(cfg.get("masq"))}
+    return gl_call("tailscale", "set_config", params, timeout=60)[0]
+
+
+def get_tailscale_auth_url():
+    """The stock "Device Bind Link": tailscale.get_auth_url {} -> {auth_url}, the page that signs this router in to your Tailscale account. Returns the
+    https URL or None. It is a login link for this router, so it is only shown on screen, never logged."""
+    ok, res = gl_call("tailscale", "get_auth_url", {}, timeout=30)
+    url = res.get("auth_url") if ok and isinstance(res, dict) else None
+    return url if isinstance(url, str) and url.startswith("https://") else None
+
+
 BAND_GROUPS = ("NR-SA", "NR-NSA", "LTE")  # the stock web UI's three groups, in its order
 NETWORK_MODES = (("Auto", "AUTO"), ("5G", "NR5G"), ("4G", "LTE"))
 

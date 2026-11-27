@@ -2,8 +2,8 @@
 
 > **Status: finished 2026-11-25.** Every item in sections 1-4 was done, except **firmware install**, which Holden decided to skip (the screen shows the firmware notice and
 > points to the admin panel or the stock screen for installing). Also still stock-only: profile management on the eSIM page, SIM data limits/reset, APN, lock operator / lock tower,
-> Multi-WAN, tethering, Tor, VLAN, bridge, DPI, captive-portal sign-in. Wi-Fi writes (`wifi_rpc`) still run through the detached stand-in rather than `gl_call`, on purpose (hang handling). Nothing from this
-> work has been committed. **Later the same day Holden had text *sending* removed** (it wasn't working); section 4j (and the resend part of 4k) describe code that no longer exists.
+> Multi-WAN, tethering, Tor, VLAN, bridge, DPI, captive-portal sign-in. Wi-Fi writes (`wifi_rpc`) still run through the detached stand-in rather than `gl_call`, on purpose (hang handling). This
+> work is in the published repo. **Later the same day Holden had text *sending* removed** (it wasn't working); section 4j (and the resend part of 4k) describe code that no longer exists.
 
 Rule from Holden: before building anything, find out how the stock firmware does it and copy that.
 Sources: the stock screen's labels (`/etc/gl_screen/language/text/default`) and strings (`strings /usr/bin/gl_screen`), the stock

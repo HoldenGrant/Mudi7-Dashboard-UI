@@ -4,7 +4,7 @@
 (all Python and shell), so it builds on a Mac or Linux with only `tar` and `gzip`.
 
 ```sh
-cd packages && ./build.sh            # default version 1.0.0; the router now has 1.0.2 (./build.sh 1.0.2); or ./build.sh 1.1.0
+cd packages && ./build.sh            # default version 1.0.0; the router now has 1.0.3 (./build.sh 1.0.3); or ./build.sh 1.1.0
 ```
 
 ## Install
@@ -12,8 +12,8 @@ cd packages && ./build.sh            # default version 1.0.0; the router now has
 Either copy it over and install on the router:
 
 ```sh
-scp -O dist/gl-e5800-touch-ui_1.0.2_all.ipk root@10.10.1.1:/tmp/
-ssh root@10.10.1.1 'opkg install /tmp/gl-e5800-touch-ui_1.0.2_all.ipk && opkg install --nodeps python3-pillow'
+scp -O dist/gl-e5800-touch-ui_1.0.3_all.ipk root@10.10.1.1:/tmp/
+ssh root@10.10.1.1 'opkg install /tmp/gl-e5800-touch-ui_1.0.3_all.ipk && opkg install --nodeps python3-pillow'
 ```
 
 or upload the file in the router's LuCI page (System, Software, Upload Package). The package pulls in `python3`, `libtiff6`,
@@ -56,5 +56,8 @@ to the manual copy; the custom screen stayed the active one with no crash in the
 byte-identical to `router/`, `config.json` and `cache/` untouched, services running and enabled, no errors. A harmless "ubus service delete homebutton (Not found)" line prints during it.
 
 **Upgrade 1.0.1 -> 1.0.2 (tested the same evening):** same procedure, same result (exit 0, custom screen restored, files identical, `config.json` unchanged). The router runs 1.0.2.
+
+**Upgrade 1.0.2 -> 1.0.3 (2026-11-27):** dry run clean, real install exit 0; prerm handed the screen to stock, postinst restored the custom one; `app.py` and `lib.py` on the router are byte-identical
+to `router/`, `config.json` (checksum before and after) and `cache/` untouched, `homebutton` enabled, no render errors. The router runs 1.0.3. Contents: everything since 1.0.2 (currency/band/accent/Tailscale work, Home uplink card, VPN status, 13 px text floor, QR pages, More regroup, SIM and Wi-Fi scrolling fixes).
 
 **Not tested:** `prerm`/`postrm` as a real remove (`opkg remove`), installing on a router with no previous manual install, and a firmware update wiping the package (it will: reinstall the file).
